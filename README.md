@@ -88,25 +88,47 @@ python -m pytest tests -q
 
 ## 协作规范
 
-### 分支模型
+### 分支模型（一人一分支）
 
-| 分支 | 用途 |
-| --- | --- |
-| `main` | 随时可运行的主线，只接受 PR，禁止直接 push |
-| `dev` | 日常集成，随时可合并回 main |
-| `feat/<模块>-<简述>` | 功能分支，例：`feat/uparse-ocr` |
-| `fix/<问题>` | 修复分支，例：`fix/covenant-divzero` |
+| 分支 | 归属 | 规则 |
+| --- | --- | --- |
+| `main` | 全员 | 随时可运行的主线。已开启保护：**禁止直推**，必须走 PR 且至少 1 人批准 |
+| `dev/<用户名>` | 每人一条 | 自己的长期开发分支，随便推。例：`dev/chenmc7` |
+| `feat/<模块>-<简述>` | 可选 | 单次任务改动较大时，从自己的分支再切一条，做完合回自己的分支 |
 
-### 提交信息
+已建好的个人分支：`dev/chenmc7`、`dev/lengpaocha013-collab`、`dev/yuedou455-afk`、`dev/ooyee98633`
 
-`type(scope): 描述`，`type` 取 `feat` / `fix` / `docs` / `refactor` / `test` / `chore`。
+### 日常流程
 
-示例：`feat(covenant): 增加利息保障倍数与 EBITDA 口径`
+```bash
+# 第一次
+git clone https://github.com/chenmc7/financial-contract-agent.git
+cd financial-contract-agent
+git checkout dev/<你的用户名>
+
+# 每次开工前，先把主线并进来，减少后面的冲突
+git pull origin main
+
+# 改代码 → 提交 → 推自己的分支
+git add -A
+git commit -m "feat(uparse): 支持表格区域抽取"
+git push origin dev/<你的用户名>
+```
+
+推完去 GitHub 点 **Compare & pull request**，源分支选 `dev/<用户名>`，目标分支选 `main`，填一下为什么改、怎么验证，等队友点 Approve。
+
+**PR 合并后务必同步一次**（否则下次开 PR 会把上次的改动再带一遍）：
+
+```bash
+git fetch origin
+git reset --hard origin/main
+```
 
 ### PR 要求
 
 - 一个 PR 只做一件事，描述里写清「为什么改 / 怎么验证」。
-- 至少 1 人 review 后合并。
+- 至少 1 人 review 后合并；不能自己批自己。
+- 合并方式统一用 **Squash merge**（保持 main 历史干净），个人分支不会被自动删除。
 - 涉及计算口径、字段定义的改动，必须同时补测试与样本。
 
 ### 分工建议
