@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import time
+from contextlib import contextmanager
 
 
 class Store:
@@ -12,12 +13,25 @@ class Store:
         self.path = path
         self._init()
 
+    @contextmanager
     def _conn(self):
+        """每次操作独立连接，成功即提交、异常即回滚，退出必定关闭。
+
+        不关闭会导致 Windows 下数据库文件被进程占用，
+        备份/迁移/清理以及测试的临时目录回收都会失败。
+        """
         db = sqlite3.connect(self.path)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("PRAGMA foreign_keys=ON")
-        return db
+        try:
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def _init(self):
         with self._conn() as db:

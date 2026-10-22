@@ -36,6 +36,23 @@ COST_REQUIRED = [
 
 _REPAYMENT_VALUES = {"等额本息", "等额本金", "先息后本", "到期一次还本付息", "按季付息、分期还本"}
 
+# 只有这些业务角色可以进入现金流计算；授信额度、担保金额是"上限"或"敞口"，
+# 不是企业实际到手的资金（用户规约：不把授信上限当成实际借款）。
+PRINCIPAL_ROLES = {"actual_financing_amount", "loan_amount", "leasing_principal"}
+TERM_ROLES = {"actual_financing_term", "loan_term", "leasing_term"}
+
+ROLE_LABELS = {
+    "credit_limit": "授信额度",
+    "credit_term": "授信期限",
+    "guarantee_amount": "担保金额",
+    "guarantee_limit": "担保额度",
+    "maximum_amount": "最高额",
+}
+
+
+def _role_text(role, fallback="未知角色"):
+    return ROLE_LABELS.get(role) or (role or fallback)
+
 
 def _usable_field(contract, field_key, legacy_key):
     """只有角色正确、状态可确认且已映射到 legacy 的字段才可进入计算。"""
@@ -46,13 +63,19 @@ def _usable_field(contract, field_key, legacy_key):
     if not field:
         # 兼容已有的内置测试对象；真实上传对象始终有 fields。
         return True
-    if field.get("status") not in ("confirmed", "confirmed_by_user"):
+    status = field.get("status")
+    if status not in ("confirmed", "confirmed_by_user"):
         return False
-    if field_key == "term" and field.get("role") not in (None, "actual_financing_term", "leasing_term", "loan_term"):
-        return False
-    if field_key == "amount":
-        type_key = ((contract.get("contract_type") or {}).get("key"))
-        if type_key == "factoring" and field.get("role") != "actual_financing_amount":
+    # 人工确认过的字段以用户判断为准，不再被自动角色判定拦截。
+    if status != "confirmed_by_user":
+        role = field.get("role")
+        if field_key == "amount":
+            if role and role not in PRINCIPAL_ROLES:
+                return False
+            type_key = ((contract.get("contract_type") or {}).get("key"))
+            if type_key == "factoring" and role != "actual_financing_amount":
+                return False
+        if field_key == "term" and role not in (None,) + tuple(TERM_ROLES):
             return False
     if field_key == "payment_method" and value not in _REPAYMENT_VALUES:
         return False
@@ -71,21 +94,53 @@ def project_transaction(contract, transaction_id):
     primary = target.get("primary") or {}
     amount = primary.get("amount") or {}
     term = primary.get("term") or {}
+    fields = out.get("fields") or {}
+    amount_field = fields.get("amount") or {}
+    term_field = fields.get("term") or {}
+    # 人工确认过的字段以用户判断为准，允许覆盖自动判定的业务角色。
+    user_amount = amount_field.get("status") == "confirmed_by_user"
+    user_term = term_field.get("status") == "confirmed_by_user"
+    blocked = []
+
+    amount_role = amount.get("role")
     if amount.get("value") is not None:
-        out["principal"] = amount["value"]
-        if out.get("fields", {}).get("amount"):
-            out["fields"]["amount"].update(value=amount["value"], found=True,
-                                              status="confirmed", role=amount.get("role"))
+        if user_amount or amount_role is None or amount_role in PRINCIPAL_ROLES:
+            out["principal"] = amount["value"]
+            if amount_field:
+                amount_field.update(value=amount["value"], found=True,
+                                    status=amount_field.get("status") or "confirmed",
+                                    role=amount_role or amount_field.get("role"))
+        else:
+            # 角色不是实际融资额（授信额度/担保金额等），禁止投影为本金。
+            out["principal"] = None
+            reason = "该笔交易的金额角色为「%s」，不能作为实际融资金额参与成本测算" % _role_text(amount_role)
+            blocked.append({"field": "amount", "role": amount_role, "reason": reason})
+            if amount_field:
+                amount_field.update(value=None, found=True, status="uncertain",
+                                    role=amount_role, note=reason)
+
+    term_role = term.get("role")
     if term.get("value") is not None:
-        out["term_months"] = term["value"]
-        if out.get("fields", {}).get("term"):
-            out["fields"]["term"].update(value=term["value"], found=True,
-                                           status="confirmed", role=term.get("role"))
+        if user_term or term_role is None or term_role in TERM_ROLES:
+            out["term_months"] = term["value"]
+            if term_field:
+                term_field.update(value=term["value"], found=True,
+                                  status=term_field.get("status") or "confirmed",
+                                  role=term_role or term_field.get("role"))
+        else:
+            out["term_months"] = None
+            reason = "该笔交易的期限角色为「%s」，不能作为实际融资期限参与成本测算" % _role_text(term_role)
+            blocked.append({"field": "term", "role": term_role, "reason": reason})
+            if term_field:
+                term_field.update(value=None, found=True, status="uncertain",
+                                  role=term_role, note=reason)
     else:
         out["term_months"] = None
-        if out.get("fields", {}).get("term"):
-            out["fields"]["term"].update(value=None, status="uncertain", found=True,
-                                           role="actual_financing_term")
+        if term_field:
+            term_field.update(value=None, status="uncertain", found=True,
+                              role=term_field.get("role") or "actual_financing_term")
+    if blocked:
+        out["projection_blocked"] = blocked
     rate = primary.get("rate") or {}
     if rate.get("value") is not None:
         out["annual_rate"] = rate["value"]
@@ -117,7 +172,14 @@ def missing_detail(contract):
     if len(transactions) > 1 and not contract.get("selected_transaction_id"):
         out.append({"field": "transaction_id", "label": "交易选择", "status": "uncertain",
                     "text": "检测到 %d 笔交易，请先选择具体交易，禁止跨交易组合金额、期限和利率" % len(transactions)})
+    # 交易投影阶段已判定角色不适用（授信额度/授信期限等），直接给出业务原因，
+    # 不再回退到"置信度不足"这类含糊描述。
+    blocked = {b["field"]: b for b in (contract.get("projection_blocked") or [])}
     for fkey, legacy_key, label in COST_REQUIRED:
+        if fkey in blocked:
+            out.append({"field": fkey, "label": label, "status": "uncertain",
+                        "text": blocked[fkey]["reason"]})
+            continue
         if _usable_field(contract, fkey, legacy_key):
             continue
         f = fields.get(fkey)
