@@ -1,0 +1,125 @@
+{
+  "case_id": "E",
+  "sample_type": "信息不完整综合授信协议",
+  "synthetic": true,
+  "file": "sample_E_incomplete_credit_agreement.docx",
+  "document_type": "原始合同",
+  "transaction_type": "授信",
+  "parties": {
+    "lender": "启明商业银行股份有限公司",
+    "borrower": "星瀚制造有限公司"
+  },
+  "fields": {
+    "credit_limit": {
+      "parser_field_key": "credit_limit",
+      "label": "授信额度",
+      "value": 50000000,
+      "display": "50,000,000元",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "本协议核定综合授信额度为人民币50,000,000元。",
+          "section": "E.c1",
+          "clause_id": "E.c1",
+          "paragraph_id": "E.c1.p1",
+          "page": null
+        }
+      ],
+      "role": "credit_limit"
+    },
+    "credit_term": {
+      "parser_field_key": "term",
+      "label": "授信有效期",
+      "value": 24,
+      "display": "24个月",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "额度有效期自2026年7月1日至2028年6月30日，额度有效期届满后未使用额度自动失效。",
+          "section": "E.c1",
+          "clause_id": "E.c1",
+          "paragraph_id": "E.c1.p2",
+          "page": null
+        }
+      ],
+      "role": "credit_term"
+    },
+    "rate_mechanism": {
+      "parser_field_key": "rate",
+      "label": "利率机制",
+      "value": "1年期LPR+80BP",
+      "display": "1年期LPR+80BP",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "每笔用信的利率机制为1年期LPR加80个基点，具体执行利率在每次提款时由双方在单笔借款合同中确定。",
+          "section": "E.c2",
+          "clause_id": "E.c2",
+          "paragraph_id": "E.c2.p1",
+          "page": null
+        }
+      ],
+      "role": "lpr_spread"
+    },
+    "actual_financing_amount": {
+      "parser_field_key": "amount",
+      "value": null,
+      "status": "not_found",
+      "amount_role": "actual_financing_amount",
+      "note": "授信额度不得代替实际提款金额"
+    },
+    "drawdown_date": {
+      "parser_field_key": "effective_date",
+      "value": null,
+      "status": "not_found",
+      "date_role": "drawdown_date"
+    },
+    "drawdown_term": {
+      "parser_field_key": "term",
+      "value": null,
+      "status": "not_found",
+      "term_role": "actual_financing_term"
+    },
+    "payment_method": {
+      "parser_field_key": "payment_method",
+      "value": null,
+      "status": "not_found",
+      "role": "cashflow_structure"
+    }
+  },
+  "expected_evidence": {
+    "anchors": [
+      "E.c1.p1",
+      "E.c1.p2",
+      "E.c2.p1",
+      "E.c3.p1"
+    ],
+    "rule": "授信额度、额度有效期和LPR机制各自保留证据，不组合成实际融资现金流。"
+  },
+  "expected_costlens_state": {
+    "computable": false,
+    "reason": "当前信息不足，暂无法唯一计算总融资成本。",
+    "missing_inputs": [
+      "actual_financing_amount",
+      "drawdown_date",
+      "drawdown_term",
+      "payment_method"
+    ],
+    "blocking_reason": "授信协议未披露实际提款金额、放款日、单笔实际融资期限和完整还款现金流；不得使用授信额度或额度有效期替代。"
+  },
+  "expected_scenario_behavior": {
+    "without_user_assumptions": "blocked",
+    "reason": "没有真实现金流，禁止直接模拟。",
+    "with_user_assumptions": {
+      "assumption_label": "用户设定的情景假设（不属于合同原始事实）",
+      "principal": 20000000,
+      "annual_rate": 0.053,
+      "term_months": 12,
+      "repayment": "先息后本",
+      "expected": "仅在用户主动补充这些参数后允许情景计算。"
+    }
+  },
+  "expected_covenants": [],
+  "expected_contract_diff": null,
+  "expected_status": "insufficient_information"
+}

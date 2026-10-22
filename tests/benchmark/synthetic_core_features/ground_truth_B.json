@@ -1,0 +1,476 @@
+{
+  "case_id": "B",
+  "sample_type": "带财务契约的企业贷款合同",
+  "synthetic": true,
+  "file": "sample_B_covenant_loan.docx",
+  "financial_data_file": "sample_B_financial_data.json",
+  "financial_data_missing_file": "sample_B_financial_data_missing.json",
+  "document_type": "原始合同",
+  "transaction_type": "贷款",
+  "parties": {
+    "lender": "澄海商业银行股份有限公司",
+    "borrower": "远川能源有限公司"
+  },
+  "fields": {
+    "amount": {
+      "parser_field_key": "amount",
+      "label": "实际融资金额/本金",
+      "value": 15000000,
+      "display": "15000000",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "本合同项下实际借款金额（借款本金）为人民币15,000,000元。",
+          "section": "B.c1",
+          "clause_id": "B.c1",
+          "paragraph_id": "B.c1.p1",
+          "page": null
+        }
+      ],
+      "role": "actual_financing_amount"
+    },
+    "rate": {
+      "parser_field_key": "rate",
+      "label": "正常融资利率",
+      "value": 0.045,
+      "display": "4.50%/年",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "本合同执行固定年利率4.50%，在借款期限内不调整。",
+          "section": "B.c2",
+          "clause_id": "B.c2",
+          "paragraph_id": "B.c2.p2",
+          "page": null
+        }
+      ],
+      "role": "base_interest_rate"
+    },
+    "term": {
+      "parser_field_key": "term",
+      "label": "实际借款期限",
+      "value": 24,
+      "display": "24个月",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "借款期限为24个月，自2026年6月15日放款日起计算，借款到期日为2028年6月14日。",
+          "section": "B.c2",
+          "clause_id": "B.c2",
+          "paragraph_id": "B.c2.p1",
+          "page": null
+        }
+      ],
+      "role": "loan_term"
+    },
+    "payment_method": {
+      "parser_field_key": "payment_method",
+      "label": "还款方式",
+      "value": "先息后本",
+      "display": "先息后本",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "借款人按月付息、到期一次还本（先息后本），每月15日支付利息。",
+          "section": "B.c3",
+          "clause_id": "B.c3",
+          "paragraph_id": "B.c3.p1",
+          "page": null
+        }
+      ],
+      "role": "cashflow_structure"
+    },
+    "service_fee": {
+      "parser_field_key": "fee_bearing",
+      "label": "融资服务费",
+      "value": 45000,
+      "display": "45000",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "借款人应在放款日一次性支付融资服务费人民币45,000元。",
+          "section": "B.c3",
+          "clause_id": "B.c3",
+          "paragraph_id": "B.c3.p2",
+          "page": null
+        }
+      ],
+      "role": "service_fee"
+    }
+  },
+  "expected_evidence": {
+    "covenant_clause_ids": [
+      "B.c4.p1",
+      "B.c4.p2",
+      "B.c4.p3",
+      "B.c4.p4"
+    ],
+    "rule": "每项契约的证据应包含指标、方向、阈值和检查频率；利息保障倍数还用于暴露当前解析器覆盖差异。"
+  },
+  "expected_costlens_state": {
+    "computable": true,
+    "inputs": {
+      "actual_financing_amount": 15000000,
+      "base_interest_rate": 0.045,
+      "term_months": 24,
+      "repayment": "先息后本",
+      "service_fee": 45000
+    },
+    "calculation": {
+      "formula": "利息=本金×年利率×24/12；总融资成本=利息+融资服务费。",
+      "base": {
+        "computable": true,
+        "principal": 15000000,
+        "annual_rate": 0.045,
+        "term_months": 24,
+        "repayment": "先息后本",
+        "cashflows": [
+          {
+            "period": 1,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 2,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 3,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 4,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 5,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 6,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 7,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 8,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 9,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 10,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 11,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 12,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 13,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 14,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 15,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 16,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 17,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 18,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 19,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 20,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 21,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 22,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 23,
+            "interest": 56250.0,
+            "principal": 0,
+            "total": 56250.0,
+            "balance": 15000000
+          },
+          {
+            "period": 24,
+            "interest": 56250.0,
+            "principal": 15000000,
+            "total": 15056250.0,
+            "balance": 0
+          }
+        ],
+        "total_interest": 1350000.0,
+        "total_fees": 45000,
+        "deposit": 0,
+        "total_cost": 1395000.0,
+        "net_received": 14955000,
+        "nominal_cost": 1350000.0,
+        "comprehensive_rate": 0.093,
+        "comprehensive_rate_pct": 9.3,
+        "real_annual_cost_pct": 4.66,
+        "rate_gap_pp": 0.3,
+        "cost_items": [
+          {
+            "name": "利息支出",
+            "amount": 1350000.0,
+            "type": "interest",
+            "detail": "名义利率 4.50% × 本金 × 期限"
+          },
+          {
+            "name": "融资服务费",
+            "amount": 45000,
+            "type": "fee",
+            "detail": "费率 0.30%，一次性支付，",
+            "clause": null,
+            "source": null
+          }
+        ],
+        "inputs": [
+          {
+            "field": "amount",
+            "label": "实际融资金额/本金",
+            "normalized": 15000000,
+            "source_text": "",
+            "clause": "",
+            "page": null,
+            "confidence": null,
+            "status": "confirmed",
+            "method": "rule_extraction",
+            "formula_role": "现金流本金",
+            "correction_history": []
+          },
+          {
+            "field": "rate",
+            "label": "固定年利率",
+            "normalized": 0.045,
+            "source_text": "",
+            "clause": "",
+            "page": null,
+            "confidence": null,
+            "status": "confirmed",
+            "method": "rule_extraction",
+            "formula_role": "月利率 = 年利率 / 12",
+            "correction_history": []
+          },
+          {
+            "field": "term",
+            "label": "实际融资期限",
+            "normalized": 24,
+            "source_text": "",
+            "clause": "",
+            "page": null,
+            "confidence": null,
+            "status": "confirmed",
+            "method": "rule_extraction",
+            "formula_role": "还款期数",
+            "correction_history": []
+          },
+          {
+            "field": "payment_method",
+            "label": "还款方式",
+            "normalized": "先息后本",
+            "source_text": "",
+            "clause": "",
+            "page": null,
+            "confidence": null,
+            "status": "confirmed",
+            "method": "rule_extraction",
+            "formula_role": "确定现金流模型",
+            "correction_history": []
+          }
+        ],
+        "max_cost_item": {
+          "name": "利息支出",
+          "amount": 1350000.0,
+          "type": "interest",
+          "detail": "名义利率 4.50% × 本金 × 期限"
+        },
+        "summary": "合同名义年利率 4.50%；按还款计划测算总利息 1350000.00 元、固定费用 45000.00 元，期限内总融资成本率约 9.30%。 固定费用相当于本金的 0.30%。"
+      }
+    }
+  },
+  "expected_scenario_behavior": {
+    "contract_facts": {
+      "rate": 0.045,
+      "term_months": 24
+    },
+    "allowed": true,
+    "note": "利率、期限或提前还款比较必须显示为用户情景假设。"
+  },
+  "expected_covenants": [
+    {
+      "indicator": "资产负债率",
+      "operator": "<=",
+      "threshold": 70,
+      "unit": "%",
+      "frequency": "季度",
+      "required_data": [
+        "total_liabilities",
+        "total_assets"
+      ],
+      "current_engine_supported": true,
+      "evidence": {
+        "text": "资产负债率不得超过70%，贷款人每季度检查一次；如突破，借款人应在30日内恢复，贷款人有权要求提前到期。",
+        "section": "B.c4",
+        "clause_id": "B.c4",
+        "paragraph_id": "B.c4.p1",
+        "page": null
+      }
+    },
+    {
+      "indicator": "流动比率",
+      "operator": ">=",
+      "threshold": 1.2,
+      "unit": "",
+      "frequency": "季度",
+      "required_data": [
+        "current_assets",
+        "current_liabilities"
+      ],
+      "current_engine_supported": true,
+      "evidence": {
+        "text": "流动比率不得低于1.20，贷款人每季度检查一次；如突破，借款人应在30日内恢复。",
+        "section": "B.c4",
+        "clause_id": "B.c4",
+        "paragraph_id": "B.c4.p2",
+        "page": null
+      }
+    },
+    {
+      "indicator": "利息保障倍数",
+      "operator": ">=",
+      "threshold": 2.5,
+      "unit": "倍",
+      "frequency": "季度",
+      "required_data": [
+        "ebitda",
+        "interest_expense"
+      ],
+      "current_engine_supported": false,
+      "support_note": "当前 CovenantGuard Schema 未定义 EBITDA/利息费用字段；该条款应在基准测试中明确标记为待扩展，而非伪造判断。",
+      "evidence": {
+        "text": "利息保障倍数（EBITDA/利息费用）不得低于2.50，贷款人每季度检查一次；如突破，贷款人有权要求补充担保。",
+        "section": "B.c4",
+        "clause_id": "B.c4",
+        "paragraph_id": "B.c4.p3",
+        "page": null
+      }
+    },
+    {
+      "indicator": "净资产",
+      "operator": ">=",
+      "threshold": 50000000,
+      "unit": "元",
+      "frequency": "季度",
+      "required_data": [
+        "total_assets",
+        "total_liabilities"
+      ],
+      "current_engine_supported": true,
+      "evidence": {
+        "text": "净资产不得低于50,000,000元，贷款人每季度检查一次；如突破，借款人应在30日内补足。",
+        "section": "B.c4",
+        "clause_id": "B.c4",
+        "paragraph_id": "B.c4.p4",
+        "page": null
+      }
+    }
+  ],
+  "expected_contract_diff": null,
+  "expected_status": "confirmed_with_covenant_extension_pending"
+}

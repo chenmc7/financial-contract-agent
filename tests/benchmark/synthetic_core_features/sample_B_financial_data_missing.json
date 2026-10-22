@@ -1,0 +1,12 @@
+{
+  "case_id": "B-FIN-MISSING",
+  "synthetic": true,
+  "for_sample": "B",
+  "financials": [
+    {
+      "label": "2026Q2",
+      "total_assets": 100000000
+    }
+  ],
+  "expected_behavior": "资产负债率、流动比率、净资产均返回 UNKNOWN/无法判断；不得把缺失科目当成0。利息保障倍数因当前引擎未支持而标记为未覆盖。"
+}

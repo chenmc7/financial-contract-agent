@@ -1,0 +1,43 @@
+{
+  "case_id": "B-FIN-01",
+  "synthetic": true,
+  "for_sample": "B",
+  "schema": "ContractGuard CovenantFin（当前引擎字段）",
+  "financials": [
+    {
+      "label": "2026Q1",
+      "total_liabilities": 40000000,
+      "total_assets": 100000000,
+      "current_assets": 40000000,
+      "current_liabilities": 25000000,
+      "quick_assets": 35000000,
+      "ebitda": 18000000,
+      "interest_expense": 6000000
+    },
+    {
+      "label": "2026Q2",
+      "total_liabilities": 75000000,
+      "total_assets": 100000000,
+      "current_assets": 20000000,
+      "current_liabilities": 25000000,
+      "quick_assets": 16000000,
+      "ebitda": 8000000,
+      "interest_expense": 4000000
+    }
+  ],
+  "expected_series": {
+    "2026Q1": {
+      "资产负债率": "PASS",
+      "流动比率": "PASS",
+      "利息保障倍数": "PASS",
+      "净资产": "PASS"
+    },
+    "2026Q2": {
+      "资产负债率": "BREACH",
+      "流动比率": "BREACH",
+      "利息保障倍数": "BREACH",
+      "净资产": "BREACH"
+    }
+  },
+  "note": "ebitda/interest_expense 保留在 Ground Truth 供扩展测试；当前上传接口会按现有 CovenantFin Schema 忽略这两个字段。"
+}

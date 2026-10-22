@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ContractGuard · AI金融合同全生命周期风险管理Agent</title>
+<link rel="stylesheet" href="css/style.css?v=20260828-3">
+<link rel="stylesheet" href="css/intro.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2L28 7v9c0 8-5 13-12 15C9 29 4 24 4 16V7l12-5z' fill='%234F7CFF'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- ═══════════════ 开场引导动画 ═══════════════ -->
+<div id="intro" aria-hidden="true">
+  <div class="intro-bg">
+    <div class="intro-grid"></div>
+    <div class="intro-glow intro-glow-1"></div>
+    <div class="intro-glow intro-glow-2"></div>
+  </div>
+
+  <button id="intro-skip" type="button">跳过开场 <span>››</span></button>
+  <div class="intro-progress"><i id="intro-progress-bar"></i></div>
+
+  <!-- 场景1：品牌揭示 -->
+  <section class="intro-scene" data-scene="1">
+    <div class="s1-wrap">
+      <svg class="s1-shield" viewBox="0 0 120 132" fill="none">
+        <path class="shield-base" d="M60 6 L108 24 V64 C108 96 88 116 60 126 C32 116 12 96 12 64 V24 L60 6 Z" pathLength="340"
+              stroke="url(#shieldGrad)" stroke-width="3.5" fill="rgba(79,124,255,0.05)" stroke-linejoin="round"/>
+        <path class="shield-path" d="M60 6 L108 24 V64 C108 96 88 116 60 126 C32 116 12 96 12 64 V24 L60 6 Z" pathLength="340"
+              stroke="url(#shieldGrad)" stroke-width="3.5" fill="rgba(79,124,255,0.06)"/>
+        <path class="shield-check" d="M40 66 L54 80 L82 50" stroke="#38BDF8" stroke-width="5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <defs>
+          <linearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#4F7CFF"/><stop offset="100%" stop-color="#38BDF8"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div class="s1-logo">ContractGuard</div>
+      <div class="s1-sub">AI金融合同全生命周期风险管理 Agent</div>
+      <div class="s1-line"><i></i></div>
+    </div>
+  </section>
+
+  <!-- 场景2：合同条款提取 -->
+  <section class="intro-scene" data-scene="2">
+    <div class="s2-wrap">
+      <div class="s2-doc">
+        <div class="s2-doc-head"></div>
+        <div class="s2-line"></div><div class="s2-line"></div><div class="s2-line"></div>
+        <div class="s2-line"></div><div class="s2-line"></div><div class="s2-line"></div>
+        <div class="s2-scan"></div>
+      </div>
+      <div class="s2-chips">
+        <span class="s2-chip" style="--d:.15s"><b>利率与期限</b>自动识别</span>
+        <span class="s2-chip" style="--d:.45s"><b>各类费用</b>逐项拆解</span>
+        <span class="s2-chip" style="--d:.75s"><b>还款方式</b>现金流重构</span>
+        <span class="s2-chip" style="--d:1.05s"><b>担保与违约</b>责任定位</span>
+        <span class="s2-chip" style="--d:1.35s"><b>财务契约</b>阈值规则化</span>
+      </div>
+      <div class="s2-caption">一次解析 · 提取利率、费用、担保与契约条款</div>
+    </div>
+  </section>
+
+  <!-- 场景3：四大核心功能 -->
+  <section class="intro-scene" data-scene="3">
+    <div class="s3-title">四维引擎 · 覆盖合同全生命周期</div>
+    <div class="s3-grid">
+      <div class="s3-card" style="--d:0s">
+        <svg viewBox="0 0 24 24" class="s3-icon"><path d="M12 3v18M7 7h8a3 3 0 010 6H7m0 0h9" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="s3-name">Cost Lens</div>
+        <div class="s3-desc">真实融资成本分析<br><em>识别隐性费用 · 重构现金流</em></div>
+      </div>
+      <div class="s3-card" style="--d:.55s">
+        <svg viewBox="0 0 24 24" class="s3-icon"><path d="M4 19h16M6 15l4-6 4 3 5-8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="s3-name">Scenario Compare</div>
+        <div class="s3-desc">合同情景比较<br><em>统一假设 · 排名翻转</em></div>
+      </div>
+      <div class="s3-card" style="--d:1.1s">
+        <svg viewBox="0 0 24 24" class="s3-icon"><path d="M12 3a9 9 0 019 9M12 3a9 9 0 00-9 9m9-9v3m9 6a9 9 0 01-9 9m9-9h-3m-15 0a9 9 0 009 9m-9-9h3m6 6a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        <div class="s3-name">Covenant Guard</div>
+        <div class="s3-desc">契约监控预警<br><em>指标趋势 · 三态预警</em></div>
+      </div>
+      <div class="s3-card" style="--d:1.65s">
+        <svg viewBox="0 0 24 24" class="s3-icon"><path d="M8 3v18m8-18v18M4 8h8m4 8h8M4 3h8m4 18h8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        <div class="s3-name">Contract Diff</div>
+        <div class="s3-desc">版本风险分析<br><em>语义对齐 · 量化影响</em></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 场景4：全生命周期环 -->
+  <section class="intro-scene" data-scene="4">
+    <div class="s4-wrap">
+      <svg class="s4-ring" viewBox="0 0 320 320">
+        <circle class="s4-track" cx="160" cy="160" r="120" fill="none" stroke="rgba(148,163,184,.15)" stroke-width="2" stroke-dasharray="3 6"/>
+        <circle class="s4-arc" cx="160" cy="160" r="120" fill="none" stroke="url(#arcGrad)" stroke-width="3"
+                stroke-linecap="round" stroke-dasharray="754" stroke-dashoffset="754" transform="rotate(-90 160 160)"/>
+        <defs><linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#4F7CFF"/><stop offset="100%" stop-color="#38BDF8"/>
+        </linearGradient></defs>
+      </svg>
+      <div class="s4-node s4-top" style="--a:-90deg;--i:.05s"><span>签约前期<em>成本测算</em></span></div>
+      <div class="s4-node s4-right" style="--a:0deg;--i:.25s"><span>签约决策<em>方案比较</em></span></div>
+      <div class="s4-node s4-bottom" style="--a:90deg;--i:.45s"><span>履约监控<em>契约预警</em></span></div>
+      <div class="s4-node s4-left" style="--a:180deg;--i:.65s"><span>版本更新<em>风险比对</em></span></div>
+      <div class="s4-core">合同<br>数据中枢</div>
+    </div>
+    <div class="s4-caption">同一份合同数据 · 驱动四项专业功能</div>
+  </section>
+
+  <!-- 场景5：定版 -->
+  <section class="intro-scene" data-scene="5">
+    <div class="s5-wrap">
+      <div class="s5-slogan">把静态合同，变成<span>可计算、可监控</span>的金融风险对象</div>
+      <div class="s5-divider"></div>
+      <div class="s5-badges">
+        <span>结论与金额</span><span>计算过程</span><span>合同原文</span><span>人工复核项</span>
+      </div>
+      <button class="s5-enter" type="button">进入 ContractGuard <span>›</span></button>
+      <div class="s5-hint">每次输出同时包含</div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══════════════ 应用主体 ═══════════════ -->
+<div id="app" class="app-hidden">
+  <aside id="sidebar">
+    <div class="brand" data-view="home">
+      <svg viewBox="0 0 32 32" class="brand-mark"><path d="M16 2L28 7v9c0 8-5 13-12 15C9 29 4 24 4 16V7l12-5z" fill="url(#bg1)"/><path d="M11 16.5l4 4 7-8" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4F7CFF"/><stop offset="1" stop-color="#38BDF8"/></linearGradient></defs></svg>
+      <div class="brand-text"><b>ContractGuard</b><span>企业级金融合同风控平台</span></div>
+    </div>
+    <nav id="nav">
+      <div class="nav-label">工作台</div>
+      <button class="nav-item active" data-view="home">
+        <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9zm10 7h6V4h-6v16zM4 20h6v-4H4v4z" fill="currentColor"/></svg>
+        首页
+      </button>
+      <button class="nav-item" data-view="overview">
+        <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+        一键综合评估
+      </button>
+      <button class="nav-item" data-view="agent">
+        <svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+        Agent 任务
+      </button>
+      <div class="nav-label">四维引擎</div>
+      <button class="nav-item" data-view="costlens">
+        <svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h8a3 3 0 010 6H7m0 0h9" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="nav-txt">Cost Lens</span> <span class="nav-sub">成本分析</span>
+      </button>
+      <button class="nav-item" data-view="scenario">
+        <svg viewBox="0 0 24 24"><path d="M4 19h16M6 15l4-6 4 3 5-8" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="nav-txt">Scenario Compare</span> <span class="nav-sub">情景比较</span>
+      </button>
+      <button class="nav-item" data-view="covenant">
+        <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 019 9M12 3a9 9 0 00-9 9m9-9v3m9 6a9 9 0 01-9 9m9-9h-3m-15 0a9 9 0 009 9m-9-9h3" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+        <span class="nav-txt">Covenant Guard</span> <span class="nav-sub">契约监控</span>
+      </button>
+      <button class="nav-item" data-view="diff">
+        <svg viewBox="0 0 24 24"><path d="M8 3v18m8-18v18M4 8h8m4 8h8" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+        <span class="nav-txt">Contract Diff</span> <span class="nav-sub">版本比对</span>
+      </button>
+      <div class="nav-label">数据</div>
+      <button class="nav-item" data-view="library">
+        <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5V4zm3 4h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+        合同库
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      <button id="btn-ai-settings" class="ai-status-pill" type="button">
+        <span class="ai-dot" id="ai-dot"></span>
+        <span id="ai-status-text">AI 未配置</span>
+      </button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <div id="page-title">首页</div>
+      <div class="topbar-right">
+        <div id="service-health" class="service-health"><i></i><span>正在检查服务…</span></div>
+        <button id="btn-replay-intro" type="button" title="重新播放开场动画">
+          <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M4 4v5h5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          开场动画
+        </button>
+      </div>
+    </header>
+
+    <div id="demo-warning" class="demo-warning" hidden>
+      <b>比赛演示环境</b><span>请勿上传真实敏感合同；请优先使用公开、模拟或已脱敏材料。</span>
+    </div>
+
+    <div id="view-container">
+      <!-- 首页 -->
+      <section id="view-home" class="view active">
+        <div class="hero">
+          <h1>企业级金融合同智能风控<br><span class="grad-text">可计算 · 可比较 · 可监控 · 可解释</span></h1>
+          <p class="hero-sub">ContractGuard 把静态金融合同变成持续计算与监控的金融风险对象——上传合同，即刻获得真实成本、情景模拟、契约预警与版本风险分析。</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary" data-goto="library">上传真实合同</button>
+            <button class="btn btn-ghost" data-goto="agent">发起合同任务</button>
+          </div>
+        </div>
+        <div class="trust-flow"><span>1 上传合同</span><i>→</i><span>2 自动识别类型</span><i>→</i><span>3 结构化解析</span><i>→</i><span>4 成本与风险</span><i>→</i><span>5 原文证据</span><i>→</i><span>6 人工复核</span><i>→</i><span>7 修改后重算</span></div>
+        <div class="stats-strip">
+          <div class="stat"><b id="stat-contracts">0</b><span>当前合同</span></div>
+          <div class="stat"><b id="stat-clauses">—</b><span>结构化条款</span></div>
+          <div class="stat"><b>4</b><span>专业分析引擎</span></div>
+          <div class="stat"><b id="stat-monitor">—</b><span>契约监控规则</span></div>
+        </div>
+        <div class="feature-grid">
+          <div class="feature-card" data-goto="costlens">
+            <div class="feature-icon fi-blue"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h8a3 3 0 010 6H7m0 0h9" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div class="feature-name">Cost Lens <em>真实融资成本分析</em></div>
+            <p>识别服务费、担保费、账户管理费等全部隐性支出，重构现金流，计算综合成本率与真实年化成本。</p>
+          </div>
+          <div class="feature-card" data-goto="scenario">
+            <div class="feature-icon fi-cyan"><svg viewBox="0 0 24 24"><path d="M4 19h16M6 15l4-6 4 3 5-8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div class="feature-name">Scenario Compare <em>合同情景比较</em></div>
+            <p>在持有到期、提前还款、利率上升、现金流紧张等情景下比较多份合同，揭示排名翻转的关键条件。</p>
+          </div>
+          <div class="feature-card" data-goto="covenant">
+            <div class="feature-icon fi-gold"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 019 9M12 3a9 9 0 00-9 9m9-9v3m9 6a9 9 0 01-9 9m9-9h-3m-15 0a9 9 0 009 9m-9-9h3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+            <div class="feature-name">Covenant Guard <em>契约监控预警</em></div>
+            <p>把资产负债率等财务红线转成可执行规则，结合用户上传或录入的财务数据给出四态预警，不虚构外部实时数据。</p>
+          </div>
+          <div class="feature-card" data-goto="diff">
+            <div class="feature-icon fi-violet"><svg viewBox="0 0 24 24"><path d="M8 3v18m8-18v18M4 8h8m4 8h8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+            <div class="feature-name">Contract Diff <em>版本风险分析</em></div>
+            <p>对齐新旧版本条款，识别数字、责任主体与授权范围变化，量化影响金额并提示保证人责任变化。</p>
+          </div>
+        </div>
+        <div class="arch-note">
+          <div class="arch-title">产品亮点</div>
+          <div class="arch-items">
+            <div><b>一次解析，四维共享</b><span>合同只需上传一次，利率、费用、担保与契约条款同时驱动四项功能</span></div>
+            <div><b>大模型与确定性工具分工</b><span>大模型理解条款并生成解释，金额、现金流与阈值判断由规则引擎计算</span></div>
+            <div><b>结果可回到原文</b><span>每个数字附带合同页码、原文片段、计算公式与需人工复核的事项</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 任务驱动 Agent -->
+      <section id="view-agent" class="view">
+        <div class="view-head"><div><h2>统一任务 Agent</h2><p>描述目标并选择合同，Agent 会按合同类型、文件数量和字段完整度决定调用或跳过哪些工具</p></div></div>
+        <div class="security-strip"><div><b>数据处理</b><span id="security-state">本地规则计算 · 外部模型仅接收脱敏必要片段</span></div><label><input type="checkbox" id="deterministic-only"> 仅使用规则和确定性引擎</label></div>
+        <div class="panel">
+          <div class="task-templates" id="task-templates">
+            <button data-task="审查这份合同">审查这份合同</button><button data-task="计算真实融资成本">计算真实融资成本</button>
+            <button data-task="比较两份融资方案">比较两份融资方案</button><button data-task="检查新旧版本变化">检查新旧版本变化</button>
+            <button data-task="使用财务数据检查契约状态">检查契约状态</button><button data-task="找出最值得谈判或复核的条款">谈判与复核重点</button>
+          </div>
+          <textarea id="agent-task-input" class="textarea input" rows="3" placeholder="输入任务，例如：比较这两份融资方案，并找出最值得谈判的费用和提前还款条款"></textarea>
+          <div class="panel-title task-picker-title">选择合同</div><div class="contract-picker" id="agent-picker"></div>
+          <div class="analyze-bar"><button class="btn btn-primary" id="btn-agent-run">运行 Agent 任务</button><span class="hint-text">系统会显示工具调用原因、跳过原因和结果类型</span></div>
+        </div>
+        <div id="agent-results"></div>
+      </section>
+
+      <!-- 一键综合评估 -->
+      <section id="view-overview" class="view">
+        <div class="view-head">
+          <div><h2>一键综合评估</h2><p>选择两份或以上合同，一次调用 Cost Lens、Scenario Compare、Covenant Guard 与 Contract Diff，形成完整决策报告</p></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">选择待比较合同（至少 2 份）</div>
+          <div class="contract-picker" id="overview-picker"></div>
+          <div class="analyze-bar">
+            <button class="btn btn-primary" id="btn-overview-run">运行四引擎综合评估</button>
+            <span class="hint-text">结果包含原文条款、数据依据、风险等级与性价比评分</span>
+          </div>
+        </div>
+        <div id="overview-results"></div>
+      </section>
+
+      <!-- Cost Lens -->
+      <section id="view-costlens" class="view">
+        <div class="view-head">
+          <div><h2>Cost Lens · 真实融资成本分析</h2><p>不止看名义利率——识别合同中全部费用条款，重构现金流，计算综合成本率与真实年化成本</p></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">选择合同</div>
+          <div class="contract-picker" id="costlens-picker"></div>
+          <div class="analyze-bar">
+            <button class="btn btn-primary" id="btn-costlens-run">开始成本分析</button>
+            <span class="hint-text" id="costlens-hint"></span>
+          </div>
+        </div>
+        <div id="costlens-results"></div>
+      </section>
+
+      <!-- Scenario Compare -->
+      <section id="view-scenario" class="view">
+        <div class="view-head">
+          <div><h2>Scenario Compare · 合同情景比较</h2><p>相同假设下模拟多份合同在不同经营情景下的成本与压力，揭示排名翻转条件</p></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">选择合同（≥2 份可比较）</div>
+          <div class="contract-picker" id="scenario-picker"></div>
+          <div class="scenario-controls">
+            <div class="seg" id="scenario-tabs">
+              <button data-s="hold" class="active">持有到期</button>
+              <button data-s="prepay">提前还款</button>
+              <button data-s="rate_up">利率上升</button>
+              <button data-s="stress">现金流紧张</button>
+              <button data-s="overdue">逾期</button>
+            </div>
+            <div class="param-row" id="param-prepay" style="display:none">
+              <label>提前还款时点 <input type="range" id="param-month" min="3" max="35" value="12" step="1"><b id="param-month-val">12</b> 个月</label>
+            </div>
+            <div class="param-row" id="param-rate" style="display:none">
+              <label>利率上浮 <input type="range" id="param-delta" min="0.5" max="3" value="1" step="0.5"><b id="param-delta-val">1.0</b> 个百分点</label>
+            </div>
+            <div class="param-row" id="param-stress" style="display:none">
+              <label>延迟期数 <input type="range" id="param-late" min="1" max="6" value="3" step="1"><b id="param-late-val">3</b> 期</label>
+            </div>
+            <label class="flip-check"><input type="checkbox" id="param-flip" checked> 持有到期 vs 提前还款 排名翻转分析</label>
+          </div>
+          <div class="analyze-bar">
+            <button class="btn btn-primary" id="btn-scenario-run">运行情景模拟</button>
+            <span class="hint-text" id="scenario-hint"></span>
+          </div>
+        </div>
+        <div id="scenario-results"></div>
+      </section>
+
+      <!-- Covenant Guard -->
+      <section id="view-covenant" class="view">
+        <div class="view-head">
+          <div><h2>Covenant Guard · 契约监控预警</h2><p>上传合同并导入财务数据，把合同红线转成规则，输出安全 / 接近阈值 / 已触发 / 无法判断四态</p></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">选择含财务契约的合同</div>
+          <div class="contract-picker" id="covenant-picker"></div>
+          <div class="fin-editor">
+            <div class="fin-head">
+              <span>企业财务数据（季度）</span>
+              <div class="fin-actions">
+                <input type="file" id="fin-file-input" accept=".csv,.json,.xlsx" hidden>
+                <button class="btn btn-ghost btn-sm" id="btn-fin-import" type="button">导入财务数据</button>
+                <button class="btn btn-ghost btn-sm" id="btn-fin-add">+ 添加季度</button>
+                <button class="btn btn-ghost btn-sm" id="btn-fin-reset">载入演示数据（非真实）</button>
+              </div>
+            </div>
+            <table class="fin-table" id="fin-table">
+              <thead><tr><th>季度</th><th>总负债（元）</th><th>总资产（元）</th><th>流动资产（元）</th><th>流动负债（元）</th><th>速动资产（元）</th><th></th></tr></thead>
+              <tbody id="fin-tbody"></tbody>
+            </table>
+            <div class="hint-text">支持 CSV / JSON / XLSX，自动识别常见中英文科目表头；数据保存在本地监控历史中，更新后自动重算。</div>
+          </div>
+          <div class="analyze-bar">
+            <button class="btn btn-primary" id="btn-covenant-run">开始契约监控</button>
+            <span class="hint-text" id="covenant-hint"></span>
+          </div>
+        </div>
+        <div id="covenant-results"></div>
+      </section>
+
+      <!-- Contract Diff -->
+      <section id="view-diff" class="view">
+        <div class="view-head">
+          <div><h2>Contract Diff · 合同版本风险分析</h2><p>对齐新旧版本含义相同的条款，识别数字、责任主体、触发条件与授权范围的变化及其金融影响</p></div>
+        </div>
+        <div class="panel">
+          <div class="diff-selectors">
+            <div class="diff-sel">
+              <label>旧版本合同</label>
+              <div class="contract-picker single" id="diff-old-picker"></div>
+            </div>
+            <div class="diff-arrow">
+              <svg viewBox="0 0 24 24"><path d="M4 12h16m-6-6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="diff-sel">
+              <label>新版本合同</label>
+              <div class="contract-picker single" id="diff-new-picker"></div>
+            </div>
+          </div>
+          <div class="param-row">
+            <label>剩余本金（可选，用于影响金额测算）<input type="number" id="diff-principal" placeholder="留空则不作本金影响测算" step="100000" min="0" style="width:180px"></label>
+          </div>
+          <div class="analyze-bar">
+            <button class="btn btn-primary" id="btn-diff-run">开始版本比对</button>
+            <span class="hint-text" id="diff-hint"></span>
+          </div>
+        </div>
+        <div id="diff-results"></div>
+      </section>
+
+      <!-- 合同库 -->
+      <section id="view-library" class="view">
+        <div class="view-head">
+          <div><h2>合同库</h2><p>上传金融合同文件（docx / pdf / txt），系统解析金额、利率、费用、担保与契约条款</p></div>
+        </div>
+        <div class="source-notice"><b>数据说明</b><span>内置内容为依据公开法律规则与常见金融合同条款结构制作的匿名化演示样例，不宣称为任何机构的原始合同；企业真实分析请上传自有 PDF 或 Word 文件。</span></div>
+        <div class="processing-notice"><b>上传前请确认</b><span>文件将保存在本机并用于结构化解析；身份证号、银行账号和联系方式在发送外部模型前会脱敏。可在 Agent 页启用“仅确定性引擎”，并可随时彻底删除合同及其分析记录。</span></div>
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="file-input" accept=".docx,.pdf,.txt,.md" hidden>
+          <svg viewBox="0 0 24 24" class="uz-icon"><path d="M12 16V4m0 0L7 9m5-5l5 5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="uz-title">拖拽合同文件到此处，或点击选择</div>
+          <div class="uz-sub">支持 .docx / .pdf / .txt · 单文件 ≤ 15MB · 上传后自动解析关键条款</div>
+          <div class="uz-alt">
+            <button class="btn btn-ghost btn-sm" id="btn-paste-text">粘贴合同文本</button>
+          </div>
+        </div>
+        <div id="paste-modal" class="modal-mask" style="display:none">
+          <div class="modal">
+            <div class="modal-title">粘贴合同文本</div>
+            <input id="paste-name" class="input" placeholder="合同名称（如：XX银行借款合同）">
+            <textarea id="paste-text" class="textarea" rows="10" placeholder="粘贴合同全文，系统将自动提取利率、费用、担保与契约条款…"></textarea>
+            <div class="modal-actions">
+              <button class="btn btn-ghost" id="paste-cancel">取消</button>
+              <button class="btn btn-primary" id="paste-submit">解析合同</button>
+            </div>
+          </div>
+        </div>
+        <div class="lib-list" id="lib-list"></div>
+        <div id="contract-detail"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- 字段人工复核 -->
+<div id="field-edit-modal" class="modal-mask" style="display:none"><div class="modal">
+  <div class="modal-title">人工复核字段 <span class="modal-sub">原始证据不会被覆盖；保存后自动重新运行相关分析</span></div>
+  <input type="hidden" id="field-edit-cid"><input type="hidden" id="field-edit-key">
+  <div class="form-row"><label id="field-edit-label">字段</label><input id="field-edit-value" class="input"></div>
+  <div class="form-row"><label>显示值（可选）</label><input id="field-edit-display" class="input"></div>
+  <div class="field-original"><b>原文证据</b><p id="field-edit-evidence"></p></div>
+  <div class="form-row"><label>处理方式</label><div class="seg" id="field-resolution"><button data-r="adopt_value" class="active">采用修正值</button><button data-r="uncertain">暂不确定</button><button data-r="legal_review">提交人工复核</button></div></div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="field-edit-cancel">取消</button><button class="btn btn-primary" id="field-edit-save">保存并重新计算</button></div>
+</div></div>
+
+<!-- 可跳过的案例流程演示 -->
+<div id="demo-overlay" class="demo-overlay" style="display:none" aria-modal="true" role="dialog">
+  <div class="demo-shell">
+    <button id="demo-close" class="demo-close" type="button">关闭</button>
+    <section id="demo-select" class="demo-select">
+      <div class="demo-kicker">ContractGuard 产品流程演示</div>
+      <h2>选择一个业务场景</h2>
+      <p>约 12 秒展示合同导入、四引擎分析与综合决策；演示可随时跳过。</p>
+      <div class="demo-cases">
+        <button class="demo-case" data-case="finance" type="button"><b>企业融资方案决策</b><span>比较两份贷款方案，展示成本、提前还款翻转与条款风险</span><em>SC002 / SC003</em></button>
+        <button class="demo-case" data-case="renewal" type="button"><b>融资租赁续签审查</b><span>比对新旧合同，识别保证责任、违约金与信息授权变化</span><em>SC005 / SC006</em></button>
+      </div>
+      <div class="demo-disclaimer">演示案例已匿名化，用于呈现功能；真实业务请上传企业自有合同。</div>
+    </section>
+    <section id="demo-run" class="demo-run" style="display:none">
+      <div class="demo-run-head"><div><span id="demo-case-label">企业融资方案决策</span><b id="demo-stage-title">导入合同</b></div><button id="demo-skip" type="button">跳过动画，查看报告 ›</button></div>
+      <div class="demo-progress"><i id="demo-progress-bar"></i></div>
+      <div class="demo-stage-grid">
+        <div class="demo-docs"><div class="demo-doc"><span>PDF</span><i></i><i></i><i></i></div><div class="demo-doc"><span>DOCX</span><i></i><i></i><i></i></div><div class="demo-scan"></div></div>
+        <div class="demo-engine-list">
+          <div data-demo-step="1"><b>01</b><span>AI 条款解析<em>识别金额、利率、费用与担保</em></span></div>
+          <div data-demo-step="2"><b>02</b><span>Cost Lens<em>重构现金流与真实成本</em></span></div>
+          <div data-demo-step="3"><b>03</b><span>Scenario Compare<em>统一假设下比较两份合同</em></span></div>
+          <div data-demo-step="4"><b>04</b><span>Covenant Guard<em>财务契约阈值监控</em></span></div>
+          <div data-demo-step="5"><b>05</b><span>Contract Diff<em>定位条款变化与风险方向</em></span></div>
+          <div data-demo-step="6"><b>06</b><span>综合评价<em>风险等级、结论与性价比</em></span></div>
+        </div>
+      </div>
+      <div class="demo-live" id="demo-live">正在读取合同原文…</div>
+    </section>
+  </div>
+</div>
+
+<!-- AI 助手 -->
+<button id="ai-fab" type="button" title="AI 风控专家">
+  <svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3z" fill="currentColor"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" fill="currentColor" opacity=".7"/></svg>
+</button>
+<div id="ai-panel">
+  <div class="ai-head">
+    <div class="ai-title">
+      <span class="ai-dot lg" id="ai-dot2"></span>
+      <div><b>AI 风控专家</b><span id="ai-engine-label">内置智能引擎</span></div>
+    </div>
+    <button id="ai-close" type="button">✕</button>
+  </div>
+  <div class="ai-quick" id="ai-quick">
+    <button data-q="解释当前分析结果的关键数字和结论">解释当前分析结果</button>
+    <button data-q="这份合同最大的风险点是什么？给出建议">评估合同风险</button>
+    <button data-q="有哪些条款需要人工复核？为什么">需要复核的条款</button>
+  </div>
+  <div class="ai-messages" id="ai-messages">
+    <div class="ai-msg bot">
+      <div class="ai-bubble">你好，我是 ContractGuard 的 AI 风控专家。你可以让我解释任何分析结果、评估条款风险，或对比不同合同方案。所有数字均以引擎计算结果为准。</div>
+    </div>
+  </div>
+  <div class="ai-input-row">
+    <input id="ai-input" class="input" placeholder="询问合同风险，如：综合成本率为什么是 6.5%？">
+    <button class="btn btn-primary btn-sm" id="ai-send">发送</button>
+  </div>
+</div>
+
+<!-- AI 设置 -->
+<div id="ai-modal" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="modal-title">AI 接口设置 <span class="modal-sub">配置后即可实时调用大模型，未配置时自动使用内置智能引擎</span></div>
+    <div class="form-row">
+      <label>AI 服务商</label>
+      <div class="seg" id="provider-seg">
+        <button data-p="openai" class="active">GPT (OpenAI)</button>
+        <button data-p="deepseek">DeepSeek</button>
+        <button data-p="zhipu">智谱GLM</button>
+        <button data-p="qwen">通义千问</button>
+        <button data-p="moonshot">Kimi</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>API Key</label>
+      <div class="env-key-notice">密钥仅由后端环境变量读取。请在项目根目录的 <code>.env</code> 中配置 <code>CONTRACTGUARD_API_KEY</code>，网页不会接收或保存密钥。</div>
+    </div>
+    <div class="form-row">
+      <label>模型名称</label>
+      <input id="ai-model-input" class="input" placeholder="gpt-4o-mini">
+    </div>
+    <div class="form-row">
+      <label>网络代理</label>
+      <input id="ai-proxy-input" class="input" placeholder="留空自动探测；如 http://127.0.0.1:7897">
+      <div class="form-tip">访问 OpenAI 需要代理时填写；连接失败时会自动尝试常见本机代理端口</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="ai-modal-close">取消</button>
+      <button class="btn btn-ghost" id="ai-test-btn">测试连接</button>
+      <button class="btn btn-primary" id="ai-save-btn">保存并启用</button>
+    </div>
+    <div id="ai-test-result" class="test-result"></div>
+  </div>
+</div>
+
+<div id="toast-wrap"></div>
+
+<script src="js/api.js?v=20260828-1"></script>
+<script src="js/charts.js"></script>
+<script src="js/intro.js"></script>
+<script src="js/app.js?v=20260828-3"></script>
+</body>
+</html>

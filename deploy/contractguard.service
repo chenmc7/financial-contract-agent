@@ -1,0 +1,29 @@
+[Unit]
+Description=ContractGuard 合同风险管理服务
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/contractguard
+ExecStart=/opt/contractguard/.venv/bin/python server.py
+# 公网访问必须监听 0.0.0.0；端口 8900 可改，但记得同步防火墙/安全组
+Environment=CONTRACTGUARD_HOST=0.0.0.0
+Environment=CONTRACTGUARD_PORT=8900
+Environment=CONTRACTGUARD_DEMO_MODE=0
+# 公网共享模式：对组员屏蔽内部证据细节
+Environment=CONTRACTGUARD_SHARE_MODE=1
+# 国内大模型（DeepSeek）覆盖配置，无需梯子
+Environment=CONTRACTGUARD_PROVIDER=deepseek
+Environment=CONTRACTGUARD_BASE_URL=https://api.deepseek.com
+Environment=CONTRACTGUARD_MODEL=deepseek-chat
+# 崩溃/被杀 3 秒后自动拉起，保证“每时每刻都能打开”
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+# 基础加固
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

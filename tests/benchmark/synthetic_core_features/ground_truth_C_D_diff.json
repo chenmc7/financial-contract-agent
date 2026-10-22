@@ -1,0 +1,492 @@
+{
+  "case_id": "C-D",
+  "synthetic": true,
+  "old_file": "sample_C_original_contract.docx",
+  "new_file": "sample_D_amendment.docx",
+  "document_type": {
+    "old": "原始合同",
+    "new": "补充协议"
+  },
+  "transaction_type": {
+    "old": "贷款",
+    "new": "贷款"
+  },
+  "same_contract_relationship": "D 明确引用合同编号 HC-LOAN-2026-001；相同贷款人与借款人。",
+  "expected_contract_diff": [
+    {
+      "field_name": "amount",
+      "parser_field_key": "principal",
+      "old_value": 30000000,
+      "new_value": 35000000,
+      "change_type": "increased",
+      "old_evidence": {
+        "text": "本合同项下实际借款金额（借款本金）为人民币30,000,000元。",
+        "section": "C.c1",
+        "clause_id": "C.c1",
+        "paragraph_id": "C.c1.p1",
+        "page": null
+      },
+      "new_evidence": {
+        "text": "本补充协议生效后，本合同项下调整后的实际借款金额（借款本金）为人民币35,000,000元。",
+        "section": "D.c1",
+        "clause_id": "D.c1",
+        "paragraph_id": "D.c1.p1",
+        "page": null
+      },
+      "change_summary": "融资金额增加500万元。"
+    },
+    {
+      "field_name": "rate",
+      "parser_field_key": "annual_rate",
+      "old_value": 0.042,
+      "new_value": 0.05,
+      "change_type": "increased",
+      "old_evidence": {
+        "text": "本合同执行固定年利率4.20%，按月付息、到期一次还本（先息后本）。",
+        "section": "C.c3",
+        "clause_id": "C.c3",
+        "paragraph_id": "C.c3.p1",
+        "page": null
+      },
+      "new_evidence": {
+        "text": "本合同调整后的固定年利率为5.00%，仍按月付息、到期一次还本（先息后本）。",
+        "section": "D.c3",
+        "clause_id": "D.c3",
+        "paragraph_id": "D.c3.p1",
+        "page": null
+      },
+      "change_summary": "固定年利率由4.20%提高至5.00%。"
+    },
+    {
+      "field_name": "term_months",
+      "parser_field_key": "term_months",
+      "old_value": 24,
+      "new_value": 36,
+      "change_type": "extended",
+      "old_evidence": {
+        "text": "借款期限为24个月，自2026年5月25日放款日起计算，借款到期日为2028年5月24日。",
+        "section": "C.c2",
+        "clause_id": "C.c2",
+        "paragraph_id": "C.c2.p1",
+        "page": null
+      },
+      "new_evidence": {
+        "text": "本合同调整后的借款期限为36个月，自2026年5月25日首次放款日起计算，调整后的借款到期日为2029年5月24日。",
+        "section": "D.c2",
+        "clause_id": "D.c2",
+        "paragraph_id": "D.c2.p1",
+        "page": null
+      },
+      "change_summary": "期限延长12个月。"
+    },
+    {
+      "field_name": "guarantee",
+      "parser_field_key": "guarantee",
+      "old_value": "一般保证",
+      "new_value": "连带责任保证",
+      "change_type": "liability_strengthened",
+      "old_evidence": {
+        "text": "远川能源有限公司为本合同提供一般保证，保证期间为主债务履行期限届满之日起两年。",
+        "section": "C.c4",
+        "clause_id": "C.c4",
+        "paragraph_id": "C.c4.p1",
+        "page": null
+      },
+      "new_evidence": {
+        "text": "远川能源有限公司改为对本合同承担连带责任保证，保证期间为主债务履行期限届满之日起三年。",
+        "section": "D.c4",
+        "clause_id": "D.c4",
+        "paragraph_id": "D.c4.p1",
+        "page": null
+      },
+      "change_summary": "担保责任由一般保证改为连带责任保证，保证期间延长。"
+    },
+    {
+      "field_name": "overdue_penalty",
+      "parser_field_key": "breach_liability",
+      "old_value": "每日万分之5",
+      "new_value": "每日万分之8",
+      "change_type": "increased",
+      "old_evidence": {
+        "text": "借款人逾期的，按逾期金额每日万分之5支付违约金；逾期超过30日的，贷款人有权宣布借款提前到期。",
+        "section": "C.c5",
+        "clause_id": "C.c5",
+        "paragraph_id": "C.c5.p2",
+        "page": null
+      },
+      "new_evidence": {
+        "text": "借款人逾期的，按逾期金额每日万分之8支付违约金；逾期超过15日的，贷款人有权宣布借款提前到期。",
+        "section": "D.c5",
+        "clause_id": "D.c5",
+        "paragraph_id": "D.c5.p2",
+        "page": null
+      },
+      "change_summary": "逾期违约金日利率提高，且加速到期触发从30日收紧至15日。"
+    }
+  ],
+  "unchanged_terms": [
+    {
+      "field_name": "payment_method",
+      "value": "先息后本",
+      "note": "措辞虽增加‘仍’，经济含义未变化，不应标记为变更。"
+    },
+    {
+      "field_name": "dispute_resolution",
+      "value": "贷款人住所地法院",
+      "note": "原文相同，不应标记为变化。"
+    }
+  ],
+  "expected_costlens_after_amendment": {
+    "computable": true,
+    "inputs": {
+      "principal": 35000000,
+      "annual_rate": 0.05,
+      "term_months": 36,
+      "repayment": "先息后本"
+    },
+    "calculation": {
+      "computable": true,
+      "principal": 35000000,
+      "annual_rate": 0.05,
+      "term_months": 36,
+      "repayment": "先息后本",
+      "cashflows": [
+        {
+          "period": 1,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 2,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 3,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 4,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 5,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 6,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 7,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 8,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 9,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 10,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 11,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 12,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 13,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 14,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 15,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 16,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 17,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 18,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 19,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 20,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 21,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 22,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 23,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 24,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 25,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 26,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 27,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 28,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 29,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 30,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 31,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 32,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 33,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 34,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 35,
+          "interest": 145833.33,
+          "principal": 0,
+          "total": 145833.33,
+          "balance": 35000000
+        },
+        {
+          "period": 36,
+          "interest": 145833.33,
+          "principal": 35000000,
+          "total": 35145833.33,
+          "balance": 0
+        }
+      ],
+      "total_interest": 5249999.88,
+      "total_fees": 0,
+      "deposit": 0,
+      "total_cost": 5249999.88,
+      "net_received": 35000000,
+      "nominal_cost": 5250000.0,
+      "comprehensive_rate": 0.15,
+      "comprehensive_rate_pct": 15.0,
+      "real_annual_cost_pct": 5.0,
+      "rate_gap_pp": 0.0,
+      "cost_items": [
+        {
+          "name": "利息支出",
+          "amount": 5249999.88,
+          "type": "interest",
+          "detail": "名义利率 5.00% × 本金 × 期限"
+        }
+      ],
+      "inputs": [
+        {
+          "field": "amount",
+          "label": "实际融资金额/本金",
+          "normalized": 35000000,
+          "source_text": "",
+          "clause": "",
+          "page": null,
+          "confidence": null,
+          "status": "confirmed",
+          "method": "rule_extraction",
+          "formula_role": "现金流本金",
+          "correction_history": []
+        },
+        {
+          "field": "rate",
+          "label": "固定年利率",
+          "normalized": 0.05,
+          "source_text": "",
+          "clause": "",
+          "page": null,
+          "confidence": null,
+          "status": "confirmed",
+          "method": "rule_extraction",
+          "formula_role": "月利率 = 年利率 / 12",
+          "correction_history": []
+        },
+        {
+          "field": "term",
+          "label": "实际融资期限",
+          "normalized": 36,
+          "source_text": "",
+          "clause": "",
+          "page": null,
+          "confidence": null,
+          "status": "confirmed",
+          "method": "rule_extraction",
+          "formula_role": "还款期数",
+          "correction_history": []
+        },
+        {
+          "field": "payment_method",
+          "label": "还款方式",
+          "normalized": "先息后本",
+          "source_text": "",
+          "clause": "",
+          "page": null,
+          "confidence": null,
+          "status": "confirmed",
+          "method": "rule_extraction",
+          "formula_role": "确定现金流模型",
+          "correction_history": []
+        }
+      ],
+      "max_cost_item": {
+        "name": "利息支出",
+        "amount": 5249999.88,
+        "type": "interest",
+        "detail": "名义利率 5.00% × 本金 × 期限"
+      },
+      "summary": "合同名义年利率 5.00%；按还款计划测算总利息 5249999.88 元、固定费用 0.00 元，期限内总融资成本率约 15.00%。"
+    }
+  },
+  "expected_evidence": {
+    "rule": "每个差异必须同时带旧合同和新协议的完整证据句；D 的补充协议关系不能只靠文件名推断。"
+  },
+  "expected_status": "five_material_changes_and_unchanged_terms_preserved"
+}

@@ -1,0 +1,460 @@
+{
+  "case_id": "A",
+  "sample_type": "标准企业借款合同",
+  "synthetic": true,
+  "file": "sample_A_standard_loan.docx",
+  "document_type": "原始合同",
+  "transaction_type": "贷款",
+  "parties": {
+    "lender": "启明商业银行股份有限公司",
+    "borrower": "华辰科技有限公司"
+  },
+  "fields": {
+    "amount": {
+      "parser_field_key": "amount",
+      "label": "实际融资金额/本金",
+      "value": 20000000,
+      "display": "20000000",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "本合同项下实际借款金额（借款本金）为人民币20,000,000元。",
+          "section": "A.c2",
+          "clause_id": "A.c2",
+          "paragraph_id": "A.c2.p1",
+          "page": null
+        }
+      ],
+      "role": "actual_financing_amount"
+    },
+    "actual_financing_amount": {
+      "parser_field_key": "amount",
+      "value": 20000000,
+      "amount_role": "actual_financing_amount"
+    },
+    "rate": {
+      "parser_field_key": "rate",
+      "label": "正常融资利率",
+      "value": 0.042,
+      "display": "4.20%/年",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "本合同执行固定年利率4.20%，在借款期限内不因市场利率变化而调整。",
+          "section": "A.c4",
+          "clause_id": "A.c4",
+          "paragraph_id": "A.c4.p1",
+          "page": null
+        }
+      ],
+      "role": "base_interest_rate"
+    },
+    "base_interest_rate": {
+      "parser_field_key": "rate",
+      "value": 0.042,
+      "rate_role": "base_interest_rate"
+    },
+    "term": {
+      "parser_field_key": "term",
+      "label": "实际借款期限",
+      "value": 18,
+      "display": "18个月",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "借款期限为18个月，自2026年6月5日放款日起计算，借款到期日为2027年12月4日。",
+          "section": "A.c3",
+          "clause_id": "A.c3",
+          "paragraph_id": "A.c3.p1",
+          "page": null
+        }
+      ],
+      "role": "loan_term"
+    },
+    "drawdown_date": {
+      "parser_field_key": "effective_date",
+      "label": "放款日",
+      "value": "2026-06-05",
+      "display": "2026-06-05",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "贷款人应于2026年6月5日一次性将全部借款金额划入借款人指定账户；2026年6月5日为本笔贷款的放款日。",
+          "section": "A.c2",
+          "clause_id": "A.c2",
+          "paragraph_id": "A.c2.p2",
+          "page": null
+        }
+      ],
+      "role": "drawdown_date"
+    },
+    "maturity_date": {
+      "parser_field_key": "expiry_date",
+      "label": "到期日",
+      "value": "2027-12-04",
+      "display": "2027-12-04",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "借款期限为18个月，自2026年6月5日放款日起计算，借款到期日为2027年12月4日。",
+          "section": "A.c3",
+          "clause_id": "A.c3",
+          "paragraph_id": "A.c3.p1",
+          "page": null
+        }
+      ],
+      "role": "maturity_date"
+    },
+    "payment_method": {
+      "parser_field_key": "payment_method",
+      "label": "还款方式",
+      "value": "先息后本",
+      "display": "先息后本",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "借款人按月付息、到期一次还本（先息后本），每月5日支付上月利息，最后一期随本金一并结清。",
+          "section": "A.c5",
+          "clause_id": "A.c5",
+          "paragraph_id": "A.c5.p1",
+          "page": null
+        }
+      ],
+      "role": "cashflow_structure"
+    },
+    "service_fee": {
+      "parser_field_key": "fee_bearing",
+      "label": "融资服务费",
+      "value": 80000,
+      "display": "80000",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "借款人应在放款日一次性向贷款人支付融资服务费人民币80,000元，该费用不计入借款本金。",
+          "section": "A.c6",
+          "clause_id": "A.c6",
+          "paragraph_id": "A.c6.p1",
+          "page": null
+        }
+      ],
+      "role": "service_fee"
+    },
+    "prepayment_penalty": {
+      "parser_field_key": "early_termination",
+      "label": "提前结清违约金率",
+      "value": 0.01,
+      "display": "0.01",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "如借款人在放款日起12个月内提前结清，应按提前结清本金的1.00%支付提前结清违约金；放款满12个月后提前结清不收取该项违约金。",
+          "section": "A.c7",
+          "clause_id": "A.c7",
+          "paragraph_id": "A.c7.p2",
+          "page": null
+        }
+      ],
+      "role": "prepayment_penalty"
+    },
+    "penalty_rate": {
+      "parser_field_key": "breach_liability",
+      "label": "逾期罚息/违约金",
+      "value": "年利率上浮50%；每日万分之五",
+      "display": "年利率上浮50%；每日万分之五",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "text": "借款人未按期支付本金或利息的，逾期罚息按本合同固定年利率上浮50%计收；逾期期间另按逾期金额每日万分之五支付违约金。",
+          "section": "A.c8",
+          "clause_id": "A.c8",
+          "paragraph_id": "A.c8.p1",
+          "page": null
+        }
+      ],
+      "role": "penalty_rate"
+    }
+  },
+  "expected_evidence": {
+    "rule": "证据应是完整句或完整款，不使用固定字符窗口；DOCX 不伪造页码。",
+    "anchors": [
+      "A.c2.p1",
+      "A.c3.p1",
+      "A.c4.p1",
+      "A.c5.p1",
+      "A.c6.p1",
+      "A.c7.p2",
+      "A.c8.p1"
+    ]
+  },
+  "expected_costlens_state": {
+    "computable": true,
+    "inputs": {
+      "actual_financing_amount": 20000000,
+      "base_interest_rate": 0.042,
+      "term_months": 18,
+      "repayment": "先息后本",
+      "service_fee": 80000
+    },
+    "calculation": {
+      "formula": "利息=本金×年利率×18/12；总融资成本=利息+融资服务费；提前结清违约金不计入基准情景。",
+      "base": {
+        "computable": true,
+        "principal": 20000000,
+        "annual_rate": 0.042,
+        "term_months": 18,
+        "repayment": "先息后本",
+        "cashflows": [
+          {
+            "period": 1,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 2,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 3,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 4,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 5,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 6,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 7,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 8,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 9,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 10,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 11,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 12,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 13,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 14,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 15,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 16,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 17,
+            "interest": 70000.0,
+            "principal": 0,
+            "total": 70000.0,
+            "balance": 20000000
+          },
+          {
+            "period": 18,
+            "interest": 70000.0,
+            "principal": 20000000,
+            "total": 20070000.0,
+            "balance": 0
+          }
+        ],
+        "total_interest": 1260000.0,
+        "total_fees": 80000,
+        "deposit": 0,
+        "total_cost": 1340000.0,
+        "net_received": 19920000,
+        "nominal_cost": 1260000.0,
+        "comprehensive_rate": 0.067,
+        "comprehensive_rate_pct": 6.7,
+        "real_annual_cost_pct": 4.48,
+        "rate_gap_pp": 0.4,
+        "cost_items": [
+          {
+            "name": "利息支出",
+            "amount": 1260000.0,
+            "type": "interest",
+            "detail": "名义利率 4.20% × 本金 × 期限"
+          },
+          {
+            "name": "融资服务费",
+            "amount": 80000,
+            "type": "fee",
+            "detail": "费率 0.40%，一次性支付，",
+            "clause": null,
+            "source": null
+          }
+        ],
+        "inputs": [
+          {
+            "field": "amount",
+            "label": "实际融资金额/本金",
+            "normalized": 20000000,
+            "source_text": "",
+            "clause": "",
+            "page": null,
+            "confidence": null,
+            "status": "confirmed",
+            "method": "rule_extraction",
+            "formula_role": "现金流本金",
+            "correction_history": []
+          },
+          {
+            "field": "rate",
+            "label": "固定年利率",
+            "normalized": 0.042,
+            "source_text": "",
+            "clause": "",
+            "page": null,
+            "confidence": null,
+            "status": "confirmed",
+            "method": "rule_extraction",
+            "formula_role": "月利率 = 年利率 / 12",
+            "correction_history": []
+          },
+          {
+            "field": "term",
+            "label": "实际融资期限",
+            "normalized": 18,
+            "source_text": "",
+            "clause": "",
+            "page": null,
+            "confidence": null,
+            "status": "confirmed",
+            "method": "rule_extraction",
+            "formula_role": "还款期数",
+            "correction_history": []
+          },
+          {
+            "field": "payment_method",
+            "label": "还款方式",
+            "normalized": "先息后本",
+            "source_text": "",
+            "clause": "",
+            "page": null,
+            "confidence": null,
+            "status": "confirmed",
+            "method": "rule_extraction",
+            "formula_role": "确定现金流模型",
+            "correction_history": []
+          }
+        ],
+        "max_cost_item": {
+          "name": "利息支出",
+          "amount": 1260000.0,
+          "type": "interest",
+          "detail": "名义利率 4.20% × 本金 × 期限"
+        },
+        "summary": "合同名义年利率 4.20%；按还款计划测算总利息 1260000.00 元、固定费用 80000.00 元，期限内总融资成本率约 6.70%。 固定费用相当于本金的 0.40%。"
+      }
+    }
+  },
+  "expected_scenario_behavior": {
+    "contract_facts": {
+      "rate": 0.042,
+      "term_months": 18,
+      "prepayment_penalty_rate": 0.01
+    },
+    "scenarios": {
+      "base": {
+        "total_cost": 1340000.0,
+        "interest": 1260000.0,
+        "fees": 80000,
+        "penalty": 0,
+        "detail": "按合同约定履约至到期"
+      },
+      "rate_up_1pp": {
+        "total_cost": 1640000.06,
+        "interest": 1560000.06,
+        "fees": 80000,
+        "penalty": 0,
+        "extra_vs_base": 300000.06,
+        "detail": "利率上浮 1.0 个百分点后持有到期（浮动利率合同）"
+      },
+      "prepay_month_9": {
+        "total_cost": 910000.0,
+        "interest": 630000.0,
+        "fees": 80000,
+        "penalty": 200000.0,
+        "remaining_principal": 20000000,
+        "detail": "第 9 个月提前归还全部剩余本金（剩余本金 20000000 元），违约金 = 剩余本金 × 1.0%"
+      }
+    },
+    "note": "利率上升和提前还款参数均为用户情景假设，不修改合同原始事实。"
+  },
+  "expected_covenants": [],
+  "expected_contract_diff": null,
+  "expected_status": "confirmed"
+}

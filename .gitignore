@@ -1,0 +1,26 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 本地数据与上传文件（含真实合同，禁止入库）
+data/*.db
+data/*.db-*
+data/*.bak*
+uploads/
+uploads-public/
+output/
+
+# 密钥与环境变量
+.env
+.env.*
+!.env.example
+
+# 本地工具与临时产物
+.tools/
+*.log
+.DS_Store
+Thumbs.db

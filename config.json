@@ -1,0 +1,8 @@
+{
+  "provider": "openai",
+  "base_url": "https://api.openai.com/v1",
+  "model": "gpt-4o-mini",
+  "proxy": "",
+  "timeout": 25,
+  "retries": 2
+}
