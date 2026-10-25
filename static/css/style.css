@@ -121,7 +121,7 @@ input, textarea, select { font-family: inherit; color: var(--text); }
 .test-result.ok { display: block; background: rgba(74, 222, 128, 0.1); color: var(--green); }
 .test-result.err { display: block; background: rgba(248, 113, 113, 0.1); color: var(--red); }
 
-#toast-wrap { position: fixed; top: 24px; right: 24px; z-index: 500; display: flex; flex-direction: column; gap: 10px; }
+#toast-wrap { position: fixed; top: 76px; right: 24px; z-index: 500; display: flex; flex-direction: column; gap: 10px; }
 .toast {
   background: var(--surface-2); border: 1px solid var(--border-2);
   border-radius: 12px; padding: 12px 18px; font-size: 13px;
@@ -145,7 +145,7 @@ input, textarea, select { font-family: inherit; color: var(--text); }
 .app-hidden { display: none !important; }
 
 #sidebar {
-  width: 232px; flex-shrink: 0; display: flex; flex-direction: column;
+  width: 252px; flex-shrink: 0; display: flex; flex-direction: column;
   background: linear-gradient(180deg, #0B1120 0%, #080D18 100%);
   border-right: 1px solid var(--border); z-index: 20;
 }
@@ -325,6 +325,8 @@ input, textarea, select { font-family: inherit; color: var(--text); }
   transition: all 0.2s var(--ease); position: relative;
 }
 .cp-item:hover { border-color: var(--border-2); }
+.cp-item:disabled { opacity: 0.42; cursor: not-allowed; }
+.cp-item:disabled:hover { border-color: var(--border); }
 .cp-item.selected {
   border-color: var(--blue); background: rgba(79, 124, 255, 0.08);
   box-shadow: 0 0 0 1px rgba(79, 124, 255, 0.35);
@@ -484,7 +486,7 @@ input, textarea, select { font-family: inherit; color: var(--text); }
 }
 .f-group::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .frow {
-  display: grid; grid-template-columns: 116px 1.05fr 1.55fr 132px 104px; gap: 12px;
+  display: grid; grid-template-columns: 116px 1.05fr 1.55fr 132px 128px; gap: 12px;
   align-items: center; padding: 9px 12px; border-radius: 9px;
   background: var(--bg-2); border: 1px solid var(--border); font-size: 12.5px;
 }
@@ -499,7 +501,7 @@ input, textarea, select { font-family: inherit; color: var(--text); }
 }
 .f-ev-empty { color: var(--text-3); opacity: 0.55; font-style: normal; }
 .f-clause { color: var(--text-2); font-size: 11px; }
-.f-conf { text-align: right; }
+.f-conf { text-align: right; white-space: nowrap; }
 .frow-miss .f-name { color: var(--text-3); }
 .frow-miss .f-val { color: var(--text-3); }
 .frow-miss { background: rgba(148, 163, 184, 0.03); }
