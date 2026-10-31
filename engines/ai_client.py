@@ -29,12 +29,30 @@ COMMON_PROXIES = [
 ]
 
 PROVIDER_PRESETS = {
-    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat", "label": "DeepSeek"},
-    "zhipu": {"base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-flash", "label": "智谱GLM"},
-    "qwen": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus", "label": "通义千问"},
-    "moonshot": {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k", "label": "Kimi"},
-    "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini", "label": "OpenAI"},
+    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat",
+                 "label": "DeepSeek", "help_url": "https://platform.deepseek.com/"},
+    "zhipu": {"base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-flash",
+              "label": "智谱GLM", "help_url": "https://open.bigmodel.cn/"},
+    "qwen": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus",
+             "label": "通义千问", "help_url": "https://dashscope.console.aliyun.com/"},
+    "moonshot": {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k",
+                 "label": "Kimi", "help_url": "https://platform.moonshot.cn/"},
+    "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini",
+               "label": "OpenAI", "help_url": "https://platform.openai.com/"},
 }
+
+
+def _quota_hint():
+    """按当前供应商返回充值提示，不含前后缀，由调用处决定包装方式。
+
+    地址统一用平台首页而非充值深链接：首页地址稳定，深链接易随版本改版失效。
+    """
+    preset = PROVIDER_PRESETS.get(CONFIG.get("provider"), {})
+    label = preset.get("label") or CONFIG.get("provider") or "服务商"
+    url = preset.get("help_url") or ""
+    if url:
+        return "%s 配额不足，请到 %s 充值后再试" % (label, url)
+    return "%s 配额不足，请到服务商控制台充值后再试" % label
 
 SYSTEM_PROMPT = """你是 ContractGuard 的内嵌AI风控专家，专注于金融合同全生命周期风险管理。
 你的职责：
@@ -175,7 +193,7 @@ def test_connection():
         detail = _http_error_detail(e)
         hint = ""
         if "insufficient_quota" in detail or "quota" in detail.lower():
-            hint = " —— API Key 配额不足，请到 platform.openai.com 的 Billing 页面充值后再试"
+            hint = " —— " + _quota_hint()
         elif "invalid_api_key" in detail.lower():
             hint = " —— API Key 无效，请检查是否复制完整"
         return {"ok": False, "message": "连接失败：%s%s" % (detail[:200], hint)}
@@ -345,7 +363,7 @@ def chat_stream(messages, context=None):
                 if isinstance(exc, urllib.error.HTTPError):
                     detail = _http_error_detail(exc)
                     if "quota" in detail.lower():
-                        hint = "（原因：API Key 配额不足，请到 platform.openai.com 的 Billing 页面充值）"
+                        hint = "（原因：" + _quota_hint() + "）"
                 yield "实时 AI 服务暂时无法连接%s，已自动切换为内置智能引擎。\n\n" % hint
                 yield from _builtin_engine_stream(messages, context)
     else:
@@ -375,9 +393,11 @@ RISK_CONTEXT_MARK = "【风险审查】"
 
 def _builtin_answer(question, context):
     if not context:
+        preset = PROVIDER_PRESETS.get(CONFIG.get("provider"), {})
+        label = preset.get("label") or "大模型"
         return ("AI实时接口尚未配置，当前为内置智能引擎模式。\n\n"
-                "我可以在接入 OpenAI GPT / DeepSeek 等大模型API后提供实时智能问答。\n\n"
-                "请在后端 .env 中配置 CONTRACTGUARD_API_KEY，重启后即可启用实时调用。")
+                "我可以在接入 %s 等大模型 API 后提供实时智能问答。\n\n"
+                "请在后端 .env 中配置 CONTRACTGUARD_API_KEY，重启后即可启用实时调用。" % label)
     text = context.strip()
     # 风险段来自 /api/agent/tasks（见 server._build_ai_context），
     # 已是"风险 / 原因 / 依据 / 建议"四要素，直接呈现，不再逐行复述数字摘要
