@@ -9,6 +9,7 @@ import csv
 import io
 import hmac
 import tempfile
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -1011,6 +1012,25 @@ def update_security(body: SecurityBody):
 
 # ---------- API：AI ----------
 
+# 模型标识通常形如 gpt-4o-mini / deepseek-chat / glm-4-flash，限定字符集即可，不限定具体供应商
+_MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:\-/]{0,63}$")
+
+
+def _validate_ai_config(model, proxy):
+    """校验 AI 配置的可写字段。
+
+    原实现把请求体直接写进 config.json：模型名曾被模糊测试改写成随机字符串，
+    代理则可指向任意地址，影响后续全部外部请求。这里只做格式约束，
+    不锁定具体模型，避免堵死自定义部署。
+    """
+    if model and not _MODEL_NAME_RE.match(model.strip()):
+        raise HTTPException(400, "模型名称不合法：仅允许字母、数字与 . _ : - /，最长 64 字符")
+    if proxy:
+        parsed = urlparse(proxy.strip())
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise HTTPException(400, "代理地址不合法：需形如 http://127.0.0.1:7890")
+
+
 class AIConfigBody(BaseModel):
     provider: Optional[str] = None
     model: Optional[str] = None
@@ -1030,6 +1050,7 @@ def ai_status():
 
 @app.post("/api/ai/config")
 def ai_config(body: AIConfigBody):
+    _validate_ai_config(body.model, body.proxy)
     if body.provider:
         ai_client.set_provider(body.provider)
     if body.model:
