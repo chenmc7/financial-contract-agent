@@ -618,6 +618,22 @@ input, textarea, select { font-family: inherit; color: var(--text); }
 
 .chart-box { width: 100%; }
 .chart-box svg { width: 100%; height: auto; display: block; }
+
+/* 逐期现金流图（C4）：全量期数 + 横向滚动 + 多序列图例 */
+.cg-flow { margin: 14px 0 22px; }
+.cg-flow-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+.cg-flow-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; color: var(--text-2); }
+.cg-flow-legend > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.cg-flow-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: #4F7CFF; }
+.cg-flow-legend i.dash { height: 0; border-top: 2px dashed #94A3B8; border-radius: 0; background: none; }
+.cg-flow-unit { font-size: 11px; color: var(--text-3, #71809F); }
+.cg-flow-scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+.cg-flow-scroll svg { display: block; width: 100%; height: auto; }
+.cg-flow-scroll::-webkit-scrollbar { height: 7px; }
+.cg-flow-scroll::-webkit-scrollbar-track { background: rgba(148, 163, 184, 0.08); border-radius: 4px; }
+.cg-flow-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); border-radius: 4px; }
+.cg-flow-note { margin: 8px 0 0; font-size: 11.5px; color: var(--text-2); line-height: 1.65; }
+.cg-flow-note b { color: var(--text); font-weight: 600; }
 .cg-bars { display: grid; gap: 10px; margin: 18px 0 22px; }
 .cg-bar-row { display: grid; grid-template-columns: minmax(110px, 1.2fr) 3fr minmax(92px, auto); gap: 12px; align-items: center; font-size: 11.5px; color: var(--text-2); }
 .cg-bar-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

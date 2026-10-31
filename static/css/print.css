@@ -357,6 +357,18 @@
   .cg-bar-row { color: #374151 !important; }
   .cg-bar-row > i { background: #E4E9F1 !important; }
 
+  /* 逐期现金流图：取消横向滚动裁剪，全宽铺满一页宽度；
+     多序列颜色必须保留，因此这里不做 polyline 统一改色 */
+  .cg-flow { break-inside: avoid; page-break-inside: avoid; margin: 3mm 0 4mm; }
+  .cg-flow-scroll { overflow: visible !important; padding: 0 !important; }
+  .cg-flow-scroll svg { width: 100% !important; height: auto !important; min-width: 0 !important; }
+  .cg-flow svg text { fill: #4B5563 !important; }
+  .cg-flow svg circle { fill: #FFFFFF !important; }
+  .cg-flow-legend { color: #374151 !important; }
+  .cg-flow-legend i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .cg-flow-note { color: #4B5563 !important; }
+  .cg-flow-unit { color: #6B7280 !important; }
+
   /* ═══ 7. 打印专用页眉 / 页脚 ═══ */
   .print-only { display: block !important; }
 
