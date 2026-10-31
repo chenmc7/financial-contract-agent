@@ -7,6 +7,7 @@ import time
 import uuid
 import csv
 import io
+import hmac
 import tempfile
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -32,6 +33,28 @@ DB_PATH = os.path.abspath(os.path.expanduser(os.getenv(
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 DEMO_MODE = os.getenv("CONTRACTGUARD_DEMO_MODE", "0").lower() in ("1", "true", "yes")
 SHARE_MODE = os.getenv("CONTRACTGUARD_SHARE_MODE", "0").lower() in ("1", "true", "yes")
+
+# ---------- 公网只读保护（SHARE_MODE）----------
+# 公网隧道实例与本地实例共用同一份数据库，任何访客的写操作都会落到真实数据上。
+# 因此 SHARE_MODE 下只放行只读方法，写方法一律拦截，只有下面这份"纯计算接口"
+# 白名单例外——它们不落库、不改配置，是演示必须的能力。
+SHARE_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+SHARE_READONLY_POST_PATHS = {
+    "/api/analyze/costlens",       # 只读测算
+    "/api/analyze/scenario",       # 只读情景模拟
+    "/api/analyze/covenant",       # 只读契约判定（share 模式下不持久化财务数据）
+    "/api/analyze/diff",           # 只读版本比对
+    "/api/analyze/comprehensive",  # 只读一键评估
+    "/api/agent/tasks",            # 只读 Agent 编排（仅追加审计日志）
+    "/api/ai/chat",                # 只读问答（不落库）
+    "/api/ai/chat-once",
+}
+# 可选访问令牌：配置后，请求头携带正确令牌即可临时放行写操作（维护者远程使用）。
+SHARE_TOKEN_ENV = "CONTRACTGUARD_SHARE_TOKEN"
+SHARE_TOKEN_HEADER = "X-Share-Token"
+SHARE_TOKEN = (os.getenv(SHARE_TOKEN_ENV) or "").strip()
+SHARE_READONLY_MESSAGE = ("公网演示实例为只读模式：删除、改名、上传、修改配置等写操作已被拦截。"
+                          "请在本地实例（127.0.0.1）执行写操作后再刷新公网页面。")
 
 app = FastAPI(title="ContractGuard API", version="1.0.0")
 ai_client.load_config(CONFIG_PATH)
@@ -91,6 +114,51 @@ async def refresh_contract_cache(request, call_next):
     global CONTRACTS
     CONTRACTS = _load_contract_cache()
     return await call_next(request)
+
+
+def share_guard_decision(method, path, token=None):
+    """公网只读保护判定：返回 None 表示放行，否则返回 403 响应体。
+
+    抽成纯函数，便于单元测试逐条覆盖判定规则（不依赖 ASGI 请求对象）。
+    """
+    if not SHARE_MODE:
+        return None
+    method = (method or "").upper()
+    if method not in SHARE_WRITE_METHODS:
+        return None
+    # 归一化尾部斜杠后再比对白名单，避免 /api/analyze/costlens/ 绕过
+    normalized = "/" + (path or "").strip("/")
+    if method == "POST" and normalized in SHARE_READONLY_POST_PATHS:
+        return None
+    if SHARE_TOKEN and hmac.compare_digest(token or "", SHARE_TOKEN):
+        return None
+    return {
+        "ok": False, "share_mode": True, "readonly": True,
+        "method": method, "path": path,
+        "error": SHARE_READONLY_MESSAGE,
+        "hint": "维护者可通过环境变量 %s 配置访问令牌，并在请求头 %s 中携带后放行写操作。"
+                % (SHARE_TOKEN_ENV, SHARE_TOKEN_HEADER),
+    }
+
+
+@app.middleware("http")
+async def share_readonly_guard(request, call_next):
+    """公网只读保护：SHARE_MODE 下拦截所有写请求。
+
+    判定顺序：
+    1. 非 SHARE_MODE（本地开发实例）→ 全部放行，不影响任何人改代码；
+    2. GET/HEAD/OPTIONS 等只读方法 → 放行；
+    3. 白名单里的纯计算接口（POST）→ 放行，保证公网仍能演示测算；
+    4. 携带正确 X-Share-Token 的请求 → 放行（配置了令牌才生效）；
+    5. 其余 POST/PUT/PATCH/DELETE → 403 + 可读提示。
+
+    该中间件注册在缓存刷新之后，因此是最外层，被拦截的写请求连数据库都不会读。
+    """
+    decision = share_guard_decision(request.method, request.url.path,
+                                    request.headers.get(SHARE_TOKEN_HEADER))
+    if decision is None:
+        return await call_next(request)
+    return JSONResponse(status_code=403, content=decision)
 
 
 # ---------- 工具 ----------
@@ -564,8 +632,13 @@ def api_covenant(body: CovenantBody):
         out.append({"id": cid, "name": rec["name"], "results": results,
                     "summary": covenant.summary(results),
                     "quarters": [f.get("label") for f in fins]})
-        STORE.save_financials(cid, body.source_name, fins, out[-1])
-        STORE.audit("covenant_recomputed", cid, {"source": body.source_name, "periods": len(fins)})
+        if SHARE_MODE:
+            # 公网访客可以放心试算，但录入的财务数据不落库，
+            # 避免访客输入污染本地的财务历史与分析快照。
+            out[-1]["persisted"] = False
+        else:
+            STORE.save_financials(cid, body.source_name, fins, out[-1])
+            STORE.audit("covenant_recomputed", cid, {"source": body.source_name, "periods": len(fins)})
     if not out:
         raise HTTPException(400, "所选合同未识别到财务契约条款（如资产负债率上限），请换用含契约条款的合同")
     return {"monitors": out}
@@ -876,6 +949,7 @@ def health():
     db = STORE.health()
     return {"ok": db["ok"], "mode": "share" if SHARE_MODE else ("demo" if DEMO_MODE else "local"),
             "demo_mode": DEMO_MODE, "share_mode": SHARE_MODE, "contracts": len(CONTRACTS),
+            "readonly": SHARE_MODE, "write_token_configured": bool(SHARE_TOKEN),
             "database": db, "ai": {k: st[k] for k in ("configured", "provider", "label", "model")}}
 
 
