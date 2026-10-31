@@ -344,17 +344,68 @@ def _sync_legacy(parsed, key, value):
     elif key == "guarantee": parsed["guarantee"] = str(value) if value not in (None, "") else None
 
 
+def _contract_kind(rec):
+    """合同的类型标识：优先解析结果里的类型 key，退回上传时记录的类型。"""
+    return ((rec.get("parsed") or {}).get("contract_type") or {}).get("key") or rec.get("type") or ""
+
+
+def _is_cost_comparable(rec):
+    """能否参与情景对比：本金、利率、期限三项齐备。"""
+    parsed = rec.get("parsed") or {}
+    return bool(parsed.get("principal")) and parsed.get("annual_rate") is not None and bool(parsed.get("term_months"))
+
+
+def _select_compare_peer(rec, contracts=None):
+    """复核重算时的情景对比对手：同类型且创建时间最近的合同。
+
+    返回 (合同记录, 是否同类型)；没有可用对手时返回 None。
+
+    旧实现取 `CONTRACTS.values()` 里第一个可测算的合同，而 CONTRACTS 是从 SQLite
+    重载的 dict，载入顺序一变对手就变，同一份合同两次重算的对比结论会不一致。
+    这里显式按（类型是否相同, 创建时间倒序, 合同 ID 升序）排序，结果可复现：
+    - 同类型优先，找不到同类型才退回其他类型的最近一份；
+    - 创建时间相同（批量导入）时用 ID 兜底，避免依赖字典顺序。
+    """
+    pool = CONTRACTS if contracts is None else contracts
+    own_id = rec.get("id")
+    own_kind = _contract_kind(rec)
+    candidates = []
+    for other in pool.values():
+        if other.get("id") == own_id or not _is_cost_comparable(other):
+            continue
+        same_type = bool(own_kind) and _contract_kind(other) == own_kind
+        candidates.append((0 if same_type else 1, -(other.get("created_at") or 0), other.get("id") or "", same_type, other))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+    _, _, _, same_type, peer = candidates[0]
+    return peer, same_type
+
+
 def _rerun_single(rec):
     orch = orchestrator.orchestrate(rec["parsed"])
     result = {"orchestration": orch}
     if "costlens" in orch.get("tool_results", {}):
         result["costlens"] = orch["tool_results"]["costlens"]
     result["risk"] = orch.get("tool_results", {}).get("riskengine")
-    peers = [x for x in CONTRACTS.values() if x["id"] != rec["id"] and
-             x.get("parsed", {}).get("principal") and x.get("parsed", {}).get("annual_rate") is not None and
-             x.get("parsed", {}).get("term_months")][:1]
-    if peers and rec["parsed"].get("principal") and rec["parsed"].get("annual_rate") is not None and rec["parsed"].get("term_months"):
-        result["scenario_compare"] = scenario.compare_contracts([rec, peers[0]], "hold")
+    if _is_cost_comparable(rec):
+        selected = _select_compare_peer(rec)
+        if selected:
+            peer, same_type = selected
+            comparison = scenario.compare_contracts([rec, peer], "hold")
+            for item in comparison:
+                item["is_self"] = item.get("id") == rec["id"]
+            result["scenario_compare"] = comparison
+            # 对手显式标注，避免用户对着两个数字猜"跟谁比"
+            result["scenario_compare_peer"] = {
+                "id": peer["id"],
+                "name": peer.get("display_name") or peer.get("name"),
+                "type_key": _contract_kind(peer),
+                "type_label": ((peer.get("parsed") or {}).get("contract_type") or {}).get("label") or peer.get("type"),
+                "created_at": peer.get("created_at"),
+                "same_type": same_type,
+                "rule": "同类型且创建时间最近" if same_type else "无同类型可测算合同，退回创建时间最近的合同",
+            }
     rec["analysis_version"] = rec.get("analysis_version", 1) + 1
     STORE.save_contract(rec)
     STORE.save_analysis(rec["id"], "auto_recompute", result, rec["analysis_version"])
