@@ -369,11 +369,23 @@ def _builtin_engine_stream(messages, context):
         time.sleep(0.012)
 
 
+# 与 server.RISK_CONTEXT_MARK 保持一致：用于识别"这段上下文是风险审查结果"
+RISK_CONTEXT_MARK = "【风险审查】"
+
+
 def _builtin_answer(question, context):
     if not context:
         return ("AI实时接口尚未配置，当前为内置智能引擎模式。\n\n"
                 "我可以在接入 OpenAI GPT / DeepSeek 等大模型API后提供实时智能问答。\n\n"
                 "请在后端 .env 中配置 CONTRACTGUARD_API_KEY，重启后即可启用实时调用。")
+    text = context.strip()
+    # 风险段来自 /api/agent/tasks（见 server._build_ai_context），
+    # 已是"风险 / 原因 / 依据 / 建议"四要素，直接呈现，不再逐行复述数字摘要
+    if text.startswith(RISK_CONTEXT_MARK):
+        return ("【内置智能引擎 · 风险要点】\n\n" + text[len(RISK_CONTEXT_MARK):].strip() +
+                "\n\n以上条目按风险等级排序，依据均为合同原文摘录；"
+                "涉及重大决策建议咨询专业律师。\n"
+                "如需更完整的自然语言解读，可在后端配置 API Key 后启用实时模型。")
     head = "【内置智能引擎 · 基于当前分析结果】\n\n"
     # 提取上下文中的关键数字形成结构化回答
     lines = [head, "根据当前合同分析结果，为你梳理关键结论：\n"]

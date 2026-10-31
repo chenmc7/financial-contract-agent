@@ -696,7 +696,7 @@
     busy(button, true, "Agent 处理中…"); loading(root, "正在判断合同类型、字段完整度与最合适的分析工具…");
     try {
       const data = await API.agentTask({ task, contract_ids: ids, financials: task.includes("财务") || task.includes("契约") ? readFinancials() : null });
-      root.innerHTML = renderAgentTask(data); state.aiContext = `任务：${task}\n工具：${data.tool_trace.map(x=>x.tool+':'+x.status).join('；')}`;
+      root.innerHTML = renderAgentTask(data); state.aiContext = data.ai_context || `任务：${task}\n工具：${data.tool_trace.map(x=>x.tool+':'+x.status).join('；')}`;
     } catch (e) { root.innerHTML = ""; toast(e.message, "err"); }
     finally { busy(button, false); }
   }
@@ -705,7 +705,11 @@
     const trace = data.tool_trace.map((x) => `<div class="agent-trace ${x.status}"><span>${x.status === 'called' ? '已调用' : x.status === 'available' ? '可用' : '已跳过'}</span><b>${esc(x.tool)}</b><p>${esc(x.reason)}</p><em>${x.result_type === 'ai_judgment' ? 'AI 判断' : '确定性代码'}</em></div>`).join("");
     const reviews = data.human_review || [];
     const resultKeys = Object.keys(data.results || {});
-    return `<section class="result-block"><div class="result-title">任务执行报告<span class="rt-tag">${esc(data.task)}</span></div><div class="agent-scope"><b>外部模型</b><span>${data.external_llm.used ? `已启用 · 范围：${esc(data.external_llm.scope)}` : '未调用'}</span><b>关键计算</b><span>全部由确定性代码完成</span></div><div class="agent-trace-list">${trace}</div><div class="summary-banner gold"><div class="sb-body"><b>执行结果</b><p>已生成 ${resultKeys.length} 类结果：${esc(resultKeys.join('、') || '无可执行结果')}。${reviews.length ? `有 ${reviews.length} 项进入人工复核。` : '当前无新增人工复核项。'}</p></div></div>${reviews.length ? `<div class="ov-section"><div class="ov-sec-title">人工复核问题</div><ul class="ov-review">${reviews.map((x)=>`<li>${esc(x.label)}：${esc(x.text)}</li>`).join('')}</ul></div>` : ''}<details class="agent-raw"><summary>查看结构化任务结果</summary><pre>${esc(JSON.stringify(data.results, null, 2))}</pre></details></section>`;
+    const findings = data.ai_summary || [];
+    const findingsBlock = findings.length
+      ? `<div class="ov-section"><div class="ov-sec-title">关键发现（${findings.length} 项）</div><ul class="ov-review">${findings.map((x) => `<li><b>${esc(x.title)}</b>（${esc(x.level || '未分级')}）<br>${esc(x.why || '')}<br>依据：${esc(x.evidence || '—')}${x.clause ? '（' + esc(x.clause) + '）' : ''}<br>建议：${esc(x.advice || '—')}</li>`).join('')}</ul></div>`
+      : "";
+    return `<section class="result-block"><div class="result-title">任务执行报告<span class="rt-tag">${esc(data.task)}</span></div><div class="agent-scope"><b>外部模型</b><span>${data.external_llm.used ? `已启用 · 范围：${esc(data.external_llm.scope)}` : '未调用'}</span><b>关键计算</b><span>全部由确定性代码完成</span></div><div class="agent-trace-list">${trace}</div>${findingsBlock}<div class="summary-banner gold"><div class="sb-body"><b>执行结果</b><p>已生成 ${resultKeys.length} 类结果：${esc(resultKeys.join('、') || '无可执行结果')}。${reviews.length ? `有 ${reviews.length} 项进入人工复核。` : '当前无新增人工复核项。'}</p></div></div>${reviews.length ? `<div class="ov-section"><div class="ov-sec-title">人工复核问题</div><ul class="ov-review">${reviews.map((x)=>`<li>${esc(x.label)}：${esc(x.text)}</li>`).join('')}</ul></div>` : ''}<details class="agent-raw"><summary>查看结构化任务结果</summary><pre>${esc(JSON.stringify(data.results, null, 2))}</pre></details></section>`;
   }
 
   async function persistRename(id, input, onDone) {

@@ -912,6 +912,48 @@ def _agent_plan(task, n_contracts, has_financials):
     return _agent_normalize(_agent_keywords(task), n_contracts, has_financials), "fallback"
 
 
+RISK_CONTEXT_MARK = "【风险审查】"
+
+
+def _build_ai_context(results):
+    """从本次执行的 risks 里提炼可读结论，供聊天框与 Agent 页共用。
+
+    返回 (文本, 结构化列表)。文本以 RISK_CONTEXT_MARK 开头，
+    内置引擎据此识别"这是风险段"，按四要素回答而不是逐行复述。
+
+    证据字段用 source_text：riskengine 里的 evidence 恒为 None，
+    source_text 才是逐字摘录的原文。
+    """
+    order = {"高": 0, "中": 1, "低": 2}
+    items = []
+    for rec in results.get("reviews") or []:
+        for risk in sorted(rec.get("risks") or [], key=lambda x: order.get(x.get("level"), 9))[:3]:
+            items.append({
+                "contract": rec.get("name"),
+                "title": risk.get("title"),
+                "level": risk.get("level"),
+                "why": risk.get("explanation"),
+                "evidence": risk.get("source_text"),
+                "clause": risk.get("clause"),
+                "page": risk.get("page"),
+                "advice": risk.get("suggestion"),
+                "legal_review": bool(risk.get("needs_legal_review")),
+            })
+    if not items:
+        return "", []
+    lines = [RISK_CONTEXT_MARK]
+    for it in items:
+        lines.append("【%s】%s（%s风险）" % (it["contract"] or "合同", it["title"] or "风险项", it["level"] or "未分级"))
+        lines.append("为什么：%s" % (it["why"] or "—"))
+        where = "、".join(x for x in (it["clause"], ("第 %s 页" % it["page"]) if it["page"] else None) if x)
+        lines.append("依据：%s%s" % (it["evidence"] or "—", ("（%s）" % where) if where else ""))
+        lines.append("建议：%s" % (it["advice"] or "—"))
+        if it["legal_review"]:
+            lines.append("提示：该项建议法务复核")
+        lines.append("")
+    return "\n".join(lines).strip(), items
+
+
 class AgentTaskBody(BaseModel):
     task: str
     contract_ids: List[str]
@@ -985,10 +1027,12 @@ def run_agent_task(body: AgentTaskBody):
 
     ai_used = ai_client.is_configured() and not SECURITY["deterministic_only"]
     trace("External LLM", "available" if ai_used else "skipped", "仅用于语义解释；关键金融计算均由确定性代码完成", "ai_judgment")
+    ai_context, ai_summary = _build_ai_context(results)
     STORE.audit("agent_task_run", records[0]["id"], {"task": task, "contracts": [r["id"] for r in records], "tools": tool_trace, "plan_source": plan_source})
     return {"task": task, "contracts": [{"id": r["id"], "name": r["name"]} for r in records],
             "tool_trace": tool_trace, "results": results, "human_review": review,
             "plan_source": plan_source,
+            "ai_context": ai_context, "ai_summary": ai_summary,
             "external_llm": {"used": ai_used, "scope": SECURITY["external_scope"] if ai_used else "none"}}
 
 
