@@ -6,6 +6,7 @@
 <title>ContractGuard · AI金融合同全生命周期风险管理Agent</title>
 <link rel="stylesheet" href="css/style.css?v=20260828-3">
 <link rel="stylesheet" href="css/intro.css">
+<link rel="stylesheet" href="css/print.css?v=20261031-3">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2L28 7v9c0 8-5 13-12 15C9 29 4 24 4 16V7l12-5z' fill='%234F7CFF'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -261,6 +262,16 @@
 
       <!-- 一键综合评估 -->
       <section id="view-overview" class="view">
+        <!-- 打印专用页眉：屏幕上隐藏（.print-only），导出打印版时才出现 -->
+        <div id="print-header" class="print-only print-header">
+          <div class="ph-top">
+            <div class="ph-brand">ContractGuard · 金融合同智能风控平台</div>
+            <div class="ph-top-time" id="ph-time"></div>
+          </div>
+          <h1 class="ph-title">融资方案综合风险与成本评估报告</h1>
+          <div class="ph-sub" id="ph-subjects"></div>
+          <div class="ph-meta" id="ph-meta"></div>
+        </div>
         <div class="view-head">
           <div><h2>一键综合评估</h2><p>选择两份或以上合同，一次调用 Cost Lens、Scenario Compare、Covenant Guard 与 Contract Diff，形成完整决策报告</p></div>
         </div>
@@ -273,6 +284,13 @@
           </div>
         </div>
         <div id="overview-results"></div>
+        <!-- 打印专用页脚：报告说明与免责声明 -->
+        <div id="print-footer" class="print-only print-footer">
+          <p><b>报告说明</b>　本报告全部数值由 ContractGuard 确定性引擎计算，每个结论均可回溯至合同原文条款；标注「待复核」的字段表示原文证据不足或存在歧义，须经人工确认后方可作为决策依据。</p>
+          <p><b>数据来源</b>　合同原文与用户录入的企业财务数据。金额、现金流、比率与阈值判断均由本地规则引擎完成，外部模型不参与任何算术。</p>
+          <p><b>免责声明</b>　本报告为风险识别的辅助工具输出，不构成法律意见、审计结论或投资建议；最终商业决策应由具备相应资质的人员作出。</p>
+          <p class="pf-no" id="ph-no-foot"></p>
+        </div>
       </section>
 
       <!-- Cost Lens -->
@@ -536,6 +554,6 @@
 <script src="js/api.js?v=20260828-1"></script>
 <script src="js/charts.js"></script>
 <script src="js/intro.js"></script>
-<script src="js/app.js?v=20261031-1"></script>
+<script src="js/app.js?v=20261031-3"></script>
 </body>
 </html>

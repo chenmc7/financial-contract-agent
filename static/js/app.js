@@ -11,6 +11,7 @@
     transactionSelections: {},
     demoRunning: false,
     demoSkipped: false,
+    lastOverview: null, // 最近一次综合评估结果，打印导出时用于生成报告页眉
   };
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
@@ -668,6 +669,7 @@
     try {
       const data = await API.comprehensive({ contract_ids: ids, prepay_month: +$("#param-month")?.value || 12 });
       root.innerHTML = renderOverview(data, ids);
+      state.lastOverview = { data, ids };
       state.aiContext = `综合评价：${data.overall.conclusion}\n风险等级：${data.overall.risk_level}（${data.overall.risk_score}/100）\n性价比评分：${data.overall.value_score}/100\n`;
     } catch (e) { root.innerHTML = ""; toast(e.message, "err"); }
     finally { busy(button, false); }
@@ -686,7 +688,59 @@
     const covSummary = (d.covenants || []).map((c) => `<span>${esc(c.name)}：安全 ${c.summary.safe} · 接近阈值 ${c.summary.near} · 已触发 ${c.summary.triggered}</span>`).join("");
     const reviewList = (o.review || []).map((r) => `<li>${esc(r)}</li>`).join("");
     const knowledgeCards = (d.knowledge || []).slice(0, 3).map((k) => `<div class="know-card"><b>${esc(k.title)}</b><p>${esc(k.text)}</p><a href="${esc(k.url)}" target="_blank" rel="noopener">来源：${esc(k.source)}</a></div>`).join("");
-    return `<section class="result-block"><div class="result-title">一键综合评估报告<span class="rt-tag">四引擎联动</span></div><div class="overview-top"><div class="ov-grade"><div class="ov-label">综合风险等级</div><div class="ov-value ${riskClass}">${esc(o.risk_level)}</div><div class="ov-sub">评分 ${o.risk_score}/100（越低越安全）· ${esc(o.method)}</div></div><div class="ov-grade"><div class="ov-label">性价比评估</div><div class="ov-value">${o.value_score}<small>/100</small></div><div class="ov-sub">分数越高代表融资成本与风险越优</div></div></div><div class="summary-banner ${riskClass === 'danger' ? 'red' : riskClass === 'warn' ? 'gold' : 'green'}"><div class="sb-icon">◆</div><div class="sb-body"><b>综合评价结论</b><p>${esc(o.conclusion)}</p></div></div><div class="ov-section"><div class="ov-sec-title">一、融资成本对比（Cost Lens）</div><table class="data-table"><thead><tr><th>合同</th><th>名义利率</th><th>综合成本率</th><th>真实年化成本</th><th>总融资成本</th></tr></thead><tbody>${costRows}</tbody></table>${bestCost ? `<div class="ov-tip"><b>成本优势合同：</b>${esc(bestCost.name)}，真实年化成本 ${rawPct(bestCost.result.real_annual_cost_pct)}</div>` : ""}</div><div class="ov-section"><div class="ov-sec-title">二、情景比较结论（Scenario Compare）</div><div class="ov-pair"><div><b>持有到期最优</b><span>${esc(d.scenario.hold[0].name)} · 总成本 ${money(d.scenario.hold[0].total_cost)}</span></div><div><b>提前还款最优</b><span>第 ${d.scenario.prepay_month} 个月 · ${esc(d.scenario.prepay[0].name)} · 总成本 ${money(d.scenario.prepay[0].total_cost)}</span></div></div><div class="ov-tip">${esc(flipText)}</div></div><div class="ov-section"><div class="ov-sec-title">三、契约监控（Covenant Guard）</div><div class="ov-cov">${covSummary || "所选合同未识别到财务契约条款。"}</div></div><div class="ov-section"><div class="ov-sec-title">四、版本风险（Contract Diff）</div><div class="ov-diff"><span>风险上升 <b class="danger">${d.diff.up_count}</b> 项</span><span>风险下降 <b class="good">${d.diff.down_count}</b> 项</span><span>需复核 <b class="warn">${d.diff.review_count}</b> 项</span><span>金额影响 <b class="danger">${esc(d.diff.total_impact_text)}</b></span></div></div><div class="ov-section"><div class="ov-sec-title">五、待复核事项</div><ul class="ov-review">${reviewList}</ul></div>${knowledgeCards ? `<div class="ov-section"><div class="ov-sec-title">六、金融知识与合规提示</div><div class="know-grid">${knowledgeCards}</div></div>` : ""}</section>`;
+    // 报告导出工具栏：屏幕上显示，打印时由 print.css 隐藏
+    const toolbar = `<div class="report-toolbar"><div class="rt-note"><b>报告已生成</b><span>${ids.length} 份合同 · 四引擎联动 · 结论可回溯原文</span></div><button class="btn btn-ghost btn-sm" id="btn-print-report" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>导出打印版（A4 / PDF）</button></div>`;
+    return toolbar + `<section class="result-block"><div class="result-title">一键综合评估报告<span class="rt-tag">四引擎联动</span></div><div class="overview-top"><div class="ov-grade"><div class="ov-label">综合风险等级</div><div class="ov-value ${riskClass}">${esc(o.risk_level)}</div><div class="ov-sub">评分 ${o.risk_score}/100（越低越安全）· ${esc(o.method)}</div></div><div class="ov-grade"><div class="ov-label">性价比评估</div><div class="ov-value">${o.value_score}<small>/100</small></div><div class="ov-sub">分数越高代表融资成本与风险越优</div></div></div><div class="summary-banner ${riskClass === 'danger' ? 'red' : riskClass === 'warn' ? 'gold' : 'green'}"><div class="sb-icon">◆</div><div class="sb-body"><b>综合评价结论</b><p>${esc(o.conclusion)}</p></div></div><div class="ov-section"><div class="ov-sec-title">一、融资成本对比（Cost Lens）</div><table class="data-table"><thead><tr><th>合同</th><th>名义利率</th><th>综合成本率</th><th>真实年化成本</th><th>总融资成本</th></tr></thead><tbody>${costRows}</tbody></table>${bestCost ? `<div class="ov-tip"><b>成本优势合同：</b>${esc(bestCost.name)}，真实年化成本 ${rawPct(bestCost.result.real_annual_cost_pct)}</div>` : ""}</div><div class="ov-section"><div class="ov-sec-title">二、情景比较结论（Scenario Compare）</div><div class="ov-pair"><div><b>持有到期最优</b><span>${esc(d.scenario.hold[0].name)} · 总成本 ${money(d.scenario.hold[0].total_cost)}</span></div><div><b>提前还款最优</b><span>第 ${d.scenario.prepay_month} 个月 · ${esc(d.scenario.prepay[0].name)} · 总成本 ${money(d.scenario.prepay[0].total_cost)}</span></div></div><div class="ov-tip">${esc(flipText)}</div></div><div class="ov-section"><div class="ov-sec-title">三、契约监控（Covenant Guard）</div><div class="ov-cov">${covSummary || "所选合同未识别到财务契约条款。"}</div></div><div class="ov-section"><div class="ov-sec-title">四、版本风险（Contract Diff）</div><div class="ov-diff"><span>风险上升 <b class="danger">${d.diff.up_count}</b> 项</span><span>风险下降 <b class="good">${d.diff.down_count}</b> 项</span><span>需复核 <b class="warn">${d.diff.review_count}</b> 项</span><span>金额影响 <b class="danger">${esc(d.diff.total_impact_text)}</b></span></div></div><div class="ov-section"><div class="ov-sec-title">五、待复核事项</div><ul class="ov-review">${reviewList}</ul></div>${knowledgeCards ? `<div class="ov-section"><div class="ov-sec-title">六、金融知识与合规提示</div><div class="know-grid">${knowledgeCards}</div></div>` : ""}</section>`;
+  }
+
+  /* ══ C1：综合评估报告导出打印版 ══
+     走浏览器原生打印（与 Cmd/Ctrl+P 同一通道），不依赖服务端 PDF 组件：
+     离线可用、零额外依赖、图表以矢量输出。打印版式全部由 css/print.css 提供。 */
+  function reportStamp() {
+    const d = new Date(), p = (n) => String(n).padStart(2, "0");
+    const ymd = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`, hm = `${p(d.getHours())}${p(d.getMinutes())}`;
+    return {
+      ymd, hm,
+      readable: `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`,
+      no: `CG-${ymd}-${hm}`,
+    };
+  }
+
+  // 填充打印专用页眉页脚（这些元素在屏幕上 display:none）。
+  // 挂在 beforeprint 上，因此「点导出按钮」和「直接 Cmd/Ctrl+P」两条路都能拿到完整页眉。
+  function fillPrintHeader() {
+    const ov = state.lastOverview;
+    if (!ov) return;
+    const stamp = reportStamp();
+    const ids = ov.ids || [...state.selected.overview];
+    const names = ids.map((id) => (state.contracts.find((c) => c.id === id) || {}).name || id);
+    const shown = names.slice(0, 3).join("、") + (names.length > 3 ? ` 等 ${names.length} 份` : "");
+    const o = ov.data.overall || {};
+    if ($("#ph-time")) $("#ph-time").textContent = `生成时间　${stamp.readable}`;
+    if ($("#ph-subjects")) $("#ph-subjects").textContent = `评估对象：${shown}`;
+    if ($("#ph-meta")) $("#ph-meta").textContent =
+      `报告编号：${stamp.no}　·　综合风险等级：${o.risk_level || "—"}${o.risk_score != null ? `（${o.risk_score}/100）` : ""}　·　性价比评分：${o.value_score != null ? `${o.value_score}/100` : "—"}`;
+    if ($("#ph-no-foot")) $("#ph-no-foot").textContent = `ContractGuard 综合评估报告 · ${stamp.no} · ${stamp.readable}`;
+  }
+
+  function printReport() {
+    if (!state.lastOverview) return toast("请先运行一次综合评估，再导出打印版", "err");
+    fillPrintHeader();
+    const stamp = reportStamp();
+
+    // 借 document.title 控制「另存为 PDF」的默认文件名；打印结束后还原
+    const prevTitle = document.title;
+    document.title = `ContractGuard综合评估报告_${stamp.ymd}_${stamp.hm}`;
+    let restored = false;
+    const restore = () => {
+      if (restored) return;
+      restored = true;
+      document.title = prevTitle;
+      window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
+    setTimeout(() => window.print(), 80);
+    setTimeout(restore, 120000); // 兜底：个别浏览器不派发 afterprint
   }
 
   async function runAgentTask() {
@@ -891,6 +945,10 @@
     $("#btn-agent-run").onclick = runAgentTask; $("#task-templates").onclick = (e) => { const b=e.target.closest("[data-task]"); if(b) $("#agent-task-input").value=b.dataset.task; };
     $("#deterministic-only").onchange = async () => { await API.updateSecurity({deterministic_only:$("#deterministic-only").checked,external_scope:"masked_evidence_only"}); await refreshSecurity(); toast("数据处理策略已更新","ok"); };
     $("#btn-costlens-run").onclick = runCost; $("#btn-scenario-run").onclick = runScenario; $("#btn-covenant-run").onclick = runCovenant; $("#btn-diff-run").onclick = runDiff; $("#btn-overview-run").onclick = runOverview;
+    // 委托绑定：结果区每次重渲染都会重建按钮，绑在容器上才不会失效
+    $("#overview-results").onclick = (e) => { if (e.target.closest("#btn-print-report")) printReport(); };
+    // 直接按 Cmd/Ctrl+P 时也补全报告页眉
+    window.addEventListener("beforeprint", fillPrintHeader);
     $("#scenario-tabs").onclick = (e) => { const b = e.target.closest("button[data-s]"); if (!b) return; state.scenario = b.dataset.s; $$("button", $("#scenario-tabs")).forEach((x) => x.classList.toggle("active", x === b)); $("#param-prepay").style.display = state.scenario === "prepay" ? "flex" : "none"; $("#param-rate").style.display = state.scenario === "rate_up" ? "flex" : "none"; $("#param-stress").style.display = ["stress", "overdue"].includes(state.scenario) ? "flex" : "none"; };
     [["#param-month", "#param-month-val", 0], ["#param-delta", "#param-delta-val", 1], ["#param-late", "#param-late-val", 0]].forEach(([a, b, d]) => $(a).oninput = () => $(b).textContent = Number($(a).value).toFixed(d));
     $("#btn-fin-import").onclick = () => $("#fin-file-input").click(); $("#fin-file-input").onchange = () => importFinancialFile($("#fin-file-input").files[0]);
