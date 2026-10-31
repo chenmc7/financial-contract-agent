@@ -23,6 +23,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # 隔离测试产物，避免污染仓库内的 data/ 与 uploads/
 os.environ["CONTRACTGUARD_DB_PATH"] = os.path.join(tempfile.mkdtemp(prefix="cg-agent-"), "test.db")
 os.environ["CONTRACTGUARD_UPLOAD_DIR"] = tempfile.mkdtemp(prefix="cg-agent-up-")
+# 显式置空而非删除：_load_env_file 只在变量不存在时才从 .env 注入，
+# 置空可以阻止本机 .env 里的真实 Key 把「无 Key 走关键词」的用例带偏
+os.environ["CONTRACTGUARD_API_KEY"] = ""
+os.environ["OPENAI_API_KEY"] = ""
 
 import server  # noqa: E402  （必须在设置环境变量之后导入）
 from engines import parser, samples  # noqa: E402

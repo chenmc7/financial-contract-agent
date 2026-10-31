@@ -969,11 +969,40 @@ def _build_ai_context(results):
                 "advice": risk.get("suggestion"),
                 "legal_review": bool(risk.get("needs_legal_review")),
             })
+    # 成本测算结论：让「贵不贵」这类问题也能直接看到数字，
+    # 而不是只看到「Cost Lens 已调用」、答案藏在折叠 JSON 里。
+    for row in results.get("costlens") or []:
+        cost = row.get("result") or {}
+        real = cost.get("real_annual_cost_pct")
+        comp = cost.get("comprehensive_rate_pct")
+        if real is None and comp is None:
+            continue
+        principal = cost.get("principal")
+        items.append({
+            "contract": row.get("name"),
+            "title": "真实融资成本 %s" % (("%.2f%%" % real) if real is not None else "无法计算"),
+            "level": "成本",
+            "why": "名义年利率 %.2f%%；期限内总成本率 %s；按净到手资金折算的真实年化 %s。" % (
+                (cost.get("annual_rate") or 0) * 100,
+                ("%.2f%%" % comp) if comp is not None else "—",
+                ("%.2f%%" % real) if real is not None else "无解（费用与保证金吞掉本金）",
+            ),
+            "evidence": "本金 %s、期限 %s 个月、还款方式 %s" % (
+                ("%.0f 万元" % (principal / 10000)) if principal else "—",
+                cost.get("term_months") or "—",
+                cost.get("repayment") or "—",
+            ),
+            "clause": None,
+            "page": None,
+            "advice": cost.get("summary") or "多个方案时以真实年化为统一口径比较。",
+            "legal_review": False,
+        })
     if not items:
         return "", []
     lines = [RISK_CONTEXT_MARK]
     for it in items:
-        lines.append("【%s】%s（%s风险）" % (it["contract"] or "合同", it["title"] or "风险项", it["level"] or "未分级"))
+        level_txt = ("%s风险" % it["level"]) if it["level"] in ("高", "中", "低") else (it["level"] or "未分级")
+        lines.append("【%s】%s（%s）" % (it["contract"] or "合同", it["title"] or "风险项", level_txt))
         lines.append("为什么：%s" % (it["why"] or "—"))
         where = "、".join(x for x in (it["clause"], ("第 %s 页" % it["page"]) if it["page"] else None) if x)
         lines.append("依据：%s%s" % (it["evidence"] or "—", ("（%s）" % where) if where else ""))
