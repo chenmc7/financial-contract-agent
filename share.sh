@@ -6,11 +6,14 @@ cd "$PROJECT_DIR"
 PORT="${CONTRACTGUARD_SHARE_PORT:-8900}"
 
 export CONTRACTGUARD_SHARE_MODE=1
-export CONTRACTGUARD_DEMO_MODE=0
+# 演示模式必须开启：DEMO_MODE=0 时 _load_contract_cache 会过滤掉 source=builtin 的合同，
+# 公网独立库会显示为空。开启后首次启动自动灌入内置合成样本。
+export CONTRACTGUARD_DEMO_MODE=1
 export CONTRACTGUARD_PORT="$PORT"
-# 公网隧道与本机服务共用同一份数据，合同、人工修正和分析结果会即时同步。
-export CONTRACTGUARD_DB_PATH="$PROJECT_DIR/data/contractguard.db"
-export CONTRACTGUARD_UPLOAD_DIR="$PROJECT_DIR/uploads"
+# 公网演示使用独立数据库与上传目录，只放内置合成样本；
+# 本地真实合同与修正记录不会出现在公网实例上（两库物理隔离）。
+export CONTRACTGUARD_DB_PATH="$PROJECT_DIR/data/share.db"
+export CONTRACTGUARD_UPLOAD_DIR="$PROJECT_DIR/uploads-share"
 ./demo.sh &
 SERVER_PID=$!
 trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT INT TERM
