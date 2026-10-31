@@ -826,6 +826,91 @@ def api_comprehensive(body: ComprehensiveBody):
 
 # ---------- API：任务驱动 Agent ----------
 
+# 可用分析工具白名单：模型输出必须落在这个集合内，否则丢弃
+AGENT_TOOLS = ("risk", "costlens", "scenario", "diff", "covenant")
+# 意图分类单独设超时，不与字段补强的 25 秒共用；超时即回退，不让用户干等
+AGENT_LLM_TIMEOUT = 6
+
+# 关键词回退表：公网只读模式（deterministic_only=True）与无 Key 时的唯一可用路径
+AGENT_INTENT_KEYWORDS = {
+    "risk": ("审查", "风险", "隐患", "坑", "违约", "复核", "谈判", "不利",
+             "有没有问题", "帮我看看", "审一下"),
+    "costlens": ("成本", "融资", "利息", "贵", "便宜", "划算", "值不值", "利率",
+                 "负担", "费用高"),
+    "scenario": ("比较", "方案", "对比", "哪个好", "选哪个", "优劣", "更优",
+                 "二选一", "更合适", "哪份"),
+    "diff": ("版本", "变化", "新旧", "改了什么", "区别", "差异", "变更", "两版", "改了哪"),
+    "covenant": ("契约", "财务", "监控", "承诺", "指标", "阈值", "触发", "达标", "约束"),
+}
+
+AGENT_INTENT_PROMPT = """你是金融合同分析助手。根据用户任务，判断需要调用哪些分析工具。
+可用工具：
+- risk：风险识别（违约、罚息、担保、合规等）
+- costlens：融资成本测算（利率、费用、真实年化）
+- scenario：多方案比较（仅当选中 2 份及以上合同）
+- diff：版本差异（仅当恰好选中 2 份合同）
+- covenant：财务契约监控（仅在提供财务数据时）
+
+用户任务：{task}
+选中合同数：{n}
+是否提供财务数据：{has_fin}
+
+只返回 JSON 数组，元素为工具名，例如 ["costlens"]。无法判断时返回 []。不要任何解释。"""
+
+
+def _agent_keywords(task):
+    """关键词命中：返回工具名列表（可能含多个）。"""
+    return [tool for tool, words in AGENT_INTENT_KEYWORDS.items()
+            if any(word in task for word in words)]
+
+
+def _agent_normalize(tools, n_contracts, has_financials):
+    """白名单过滤 + 上下文约束。模型输出与关键词结果都必须过这里。"""
+    valid = []
+    for tool in tools:
+        if tool in AGENT_TOOLS and tool not in valid:
+            valid.append(tool)
+    if n_contracts < 2:
+        # 单份合同谈不上方案比较与版本对比
+        valid = [t for t in valid if t not in ("scenario", "diff")]
+    elif n_contracts != 2:
+        # 三份及以上不能当版本对比，避免把不同方案误判为新旧版本
+        valid = [t for t in valid if t != "diff"]
+    if not has_financials:
+        valid = [t for t in valid if t != "covenant"]
+    return valid
+
+
+def _agent_llm_tools(task, n_contracts, has_financials):
+    """让模型出计划。任何失败（超时/无输出/非 JSON）返回 None，交给调用方回退。"""
+    try:
+        prompt = AGENT_INTENT_PROMPT.format(
+            task=task, n=n_contracts, has_fin="是" if has_financials else "否")
+        text = ai_client.complete([{"role": "user", "content": prompt}],
+                                  max_tokens=64, temperature=0.0, timeout=AGENT_LLM_TIMEOUT)
+        if not text:
+            return None
+        matched = re.search(r"\[[^\]]*\]", text, re.S)
+        if not matched:
+            return None
+        arr = json.loads(matched.group(0))
+        if not isinstance(arr, list):
+            return None
+        return [str(item).strip().lower() for item in arr if isinstance(item, str)]
+    except Exception:
+        return None
+
+
+def _agent_plan(task, n_contracts, has_financials):
+    """返回 (工具列表, 计划来源)。来源取值：llm / keyword / fallback。"""
+    if SECURITY["deterministic_only"] or not ai_client.is_configured():
+        return _agent_normalize(_agent_keywords(task), n_contracts, has_financials), "keyword"
+    tools = _agent_llm_tools(task, n_contracts, has_financials)
+    if tools:
+        return _agent_normalize(tools, n_contracts, has_financials), "llm"
+    return _agent_normalize(_agent_keywords(task), n_contracts, has_financials), "fallback"
+
+
 class AgentTaskBody(BaseModel):
     task: str
     contract_ids: List[str]
@@ -842,7 +927,14 @@ def run_agent_task(body: AgentTaskBody):
     def trace(tool, status, why, kind="deterministic"):
         tool_trace.append({"tool": tool, "status": status, "reason": why, "result_type": kind})
 
-    if any(k in task for k in ("审查", "风险", "谈判", "复核")):
+    tools, plan_source = _agent_plan(task, len(records), bool(body.financials))
+    trace("Plan", "called",
+          {"llm": "由大模型识别任务意图并生成执行计划",
+           "keyword": "未启用大模型，按关键词规则生成执行计划",
+           "fallback": "大模型不可用或输出不合法，已回退关键词规则"}[plan_source],
+          kind="ai_judgment" if plan_source == "llm" else "deterministic")
+
+    if "risk" in tools:
         agents = []
         for rec in records:
             out = orchestrator.orchestrate(rec["parsed"]); agents.append({"id": rec["id"], "name": rec["name"], **out})
@@ -852,7 +944,7 @@ def run_agent_task(body: AgentTaskBody):
     else:
         trace("Risk Engine", "skipped", "当前目标未要求完整风险审查")
 
-    if any(k in task for k in ("成本", "融资", "谈判", "审查")):
+    if "costlens" in tools:
         analyses = []
         for rec in records:
             r = costlens.analyze_cost(rec["parsed"])
@@ -862,7 +954,7 @@ def run_agent_task(body: AgentTaskBody):
         else: trace("Cost Lens", "skipped", "合同类型不产生融资现金流或关键要素不足")
     else: trace("Cost Lens", "skipped", "用户目标不涉及融资成本")
 
-    if len(records) >= 2 and any(k in task for k in ("比较", "方案", "融资", "谈判")):
+    if "scenario" in tools:
         wrapped = [{"id": r["id"], "name": r["name"], "parsed": r["parsed"]} for r in records]
         try:
             scenario_result = scenario.flip_analysis(wrapped, {"month": 12})
@@ -875,12 +967,12 @@ def run_agent_task(body: AgentTaskBody):
             trace("Scenario Compare", "skipped", "部分合同缺少可计算要素")
     else: trace("Scenario Compare", "skipped", "需要至少两份可测算合同且任务为方案比较")
 
-    if len(records) == 2 and any(k in task for k in ("版本", "变化", "新旧")):
+    if "diff" in tools:
         results["diff"] = diffengine.diff_contracts(records[0]["parsed"], records[1]["parsed"])
         trace("Contract Diff", "called", "用户明确要求检查两份合同的版本变化")
     else: trace("Contract Diff", "skipped", "仅在两份文本且目标为版本变化时调用，避免把不同方案误当版本")
 
-    if body.financials and any(k in task for k in ("契约", "财务", "监控")):
+    if "covenant" in tools:
         fins = [f.dict() for f in body.financials]
         monitored = []
         for rec in records:
@@ -892,9 +984,10 @@ def run_agent_task(body: AgentTaskBody):
 
     ai_used = ai_client.is_configured() and not SECURITY["deterministic_only"]
     trace("External LLM", "available" if ai_used else "skipped", "仅用于语义解释；关键金融计算均由确定性代码完成", "ai_judgment")
-    STORE.audit("agent_task_run", records[0]["id"], {"task": task, "contracts": [r["id"] for r in records], "tools": tool_trace})
+    STORE.audit("agent_task_run", records[0]["id"], {"task": task, "contracts": [r["id"] for r in records], "tools": tool_trace, "plan_source": plan_source})
     return {"task": task, "contracts": [{"id": r["id"], "name": r["name"]} for r in records],
             "tool_trace": tool_trace, "results": results, "human_review": review,
+            "plan_source": plan_source,
             "external_llm": {"used": ai_used, "scope": SECURITY["external_scope"] if ai_used else "none"}}
 
 
