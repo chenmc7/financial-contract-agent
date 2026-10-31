@@ -8,6 +8,7 @@ import uuid
 import csv
 import io
 import hmac
+import logging
 import tempfile
 from urllib.parse import urlparse
 
@@ -57,10 +58,28 @@ SHARE_TOKEN = (os.getenv(SHARE_TOKEN_ENV) or "").strip()
 SHARE_READONLY_MESSAGE = ("公网演示实例为只读模式：删除、改名、上传、修改配置等写操作已被拦截。"
                           "请在本地实例（127.0.0.1）执行写操作后再刷新公网页面。")
 
-app = FastAPI(title="ContractGuard API", version="1.0.0")
+logging.basicConfig(
+    level=os.getenv("CONTRACTGUARD_LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+log = logging.getLogger("contractguard")
+
+app = FastAPI(title="ContractGuard API", version="1.0.3")
 ai_client.load_config(CONFIG_PATH)
 STORE = Store(DB_PATH)
 SECURITY = {"deterministic_only": SHARE_MODE, "external_scope": "masked_evidence_only"}
+
+log.info("ContractGuard 启动 mode=%s demo=%s db=%s upload=%s llm=%s",
+         "share" if SHARE_MODE else ("demo" if DEMO_MODE else "local"),
+         DEMO_MODE, DB_PATH, UPLOAD_DIR,
+         "configured" if ai_client.is_configured() else "not-configured")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception(request, exc):
+    """未捕获异常统一返回结构化错误：堆栈只进服务端日志，不回显给调用方。"""
+    log.exception("未处理异常 %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "服务器内部错误，请查看服务端日志"})
 
 def _load_contract_cache():
     """从 SQLite 重载合同缓存，让本机与公网进程共享最新数据。"""
@@ -333,6 +352,7 @@ async def upload_contract(file: UploadFile = File(...)):
     except RuntimeError as exc:
         raise HTTPException(503, "解析服务不可用：%s" % exc)
     except Exception as exc:
+        log.warning("解析失败 file=%s: %s", file.filename, exc)
         raise HTTPException(422, "解析失败：%s" % str(exc)[:160])
     text = extracted["text"]
     if not text or len(re.sub(r"\s", "", text)) < 30:
@@ -980,6 +1000,8 @@ def run_agent_task(body: AgentTaskBody):
            "keyword": "未启用大模型，按关键词规则生成执行计划",
            "fallback": "大模型不可用或输出不合法，已回退关键词规则"}[plan_source],
           kind="ai_judgment" if plan_source == "llm" else "deterministic")
+    log.info("agent 计划 source=%s tools=%s contracts=%d task=%.40s",
+             plan_source, tools or "[]", len(records), task)
 
     if "risk" in tools:
         agents = []
