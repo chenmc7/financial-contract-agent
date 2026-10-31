@@ -85,10 +85,15 @@ COVENANT_PATTERNS = [
 ]
 
 # 契约指标的计算公式（供前端与诊断展示，财务数据缺失时提示所需数据项）
+# 口径铁律：本表的公式文本、required_data 必须与 engines/covenant.py 的
+# compute_indicator / REQUIRED_FIELDS 完全一致，否则前端公示的口径与实际计算会打架。
 COVENANT_FORMULAS = {
     "资产负债率": ("总负债 / 总资产 × 100", ["total_liabilities", "total_assets"], "%"),
     "流动比率": ("流动资产 / 流动负债", ["current_assets", "current_liabilities"], ""),
-    "速动比率": ("流动资产 / 流动负债（速动口径）", ["current_assets", "current_liabilities"], ""),
+    # 速动比率只看速动资产（流动资产扣除存货、预付等），不能用流动资产代替；
+    # 原先声明为「流动资产 / 流动负债（速动口径）」且 required_data 指向 current_assets，
+    # 与 covenant.compute_indicator 的 quick_assets / current_liabilities 不一致，此处对齐实现。
+    "速动比率": ("速动资产 / 流动负债", ["quick_assets", "current_liabilities"], ""),
     "净资产": ("总资产 - 总负债", ["total_assets", "total_liabilities"], "元"),
 }
 

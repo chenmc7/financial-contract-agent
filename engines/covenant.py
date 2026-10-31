@@ -9,6 +9,8 @@
 import re
 
 # 指标 → 计算所需财务科目
+# 口径声明处：engines/uparse/extract.py::COVENANT_FORMULAS 的公式文本与所需科目
+# 必须与本表、compute_indicator 保持一致（速动比率 = 速动资产 / 流动负债）。
 REQUIRED_FIELDS = {
     "资产负债率": ["total_liabilities", "total_assets"],
     "流动比率": ["current_assets", "current_liabilities"],
@@ -98,6 +100,8 @@ def compute_indicator(indicator, fin):
             return None
         return fin["current_assets"] / fin["current_liabilities"]
     if indicator == "速动比率":
+        # 速动资产不含存货与预付费用，必须由用户/解析层显式提供；
+        # 不用「流动资产」代替，避免把流动比率当速动比率算（与 extract 的公式声明一致）。
         if fin.get("quick_assets") is None or not fin.get("current_liabilities"):
             return None
         return fin["quick_assets"] / fin["current_liabilities"]
@@ -109,9 +113,19 @@ def compute_indicator(indicator, fin):
 
 
 def judge_status(indicator, value, direction, threshold):
-    """四态判定：安全 / 接近阈值 / 已触发 / 无法判断"""
-    if value is None:
+    """四态判定：安全 / 接近阈值 / 已触发 / 无法判断
+
+    阈值为 0（或缺失）时不做 margin 除法：margin 是「距阈值的相对百分比」，
+    以 0 为分母无业务含义，原实现会抛 ZeroDivisionError 冒到接口层变成 500。
+    此时按比较方向直接判定状态，阈值说明由 monitor 一并输出。
+    """
+    if value is None or threshold is None:
         return "无法判断"
+    if threshold == 0:
+        # 0 阈值：min 类（≥0）任何非负值都满足，max 类（≤0）任何正值即已触发。
+        if direction == "max":
+            return "已触发" if value > 0 else "安全"
+        return "已触发" if value < 0 else "安全"
     if direction == "max":
         if value > threshold:
             return "已触发"
@@ -188,11 +202,17 @@ def monitor(covenants, financials):
                 ind, cov.get("operator") or ("<=" if direction == "max" else ">="),
                 thr, cov.get("unit") or "", cov.get("frequency") or "季度"),
         }
+        # 阈值为 0 时没有相对距离可算，改为输出说明，前端据此展示而不报错。
+        threshold_note = None
+        if thr == 0:
+            threshold_note = ("契约阈值为 0，已跳过「距阈值百分比」计算（除零保护），"
+                              "状态按比较方向直接判定，不参与「接近阈值」区间比较。")
         rule.update({
             "value": value, "status": status, "distance": distance,
             "series": series,
             "period_order": period_order,
             "latest_period": latest_period,
+            "threshold_note": threshold_note,
             "advice": _advice(ind, status, distance, cov, value),
         })
         results.append(rule)
