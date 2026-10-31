@@ -12,6 +12,7 @@
     demoRunning: false,
     demoSkipped: false,
     lastOverview: null, // 最近一次综合评估结果，打印导出时用于生成报告页眉
+    view: "home", // 当前视图，C2 用于把状态同步进地址栏
   };
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
@@ -42,12 +43,94 @@
     else { button.textContent = button.dataset.label || button.textContent; button.disabled = false; }
   }
 
-  function showView(name) {
+  /* ══ C2：视图状态进 URL ══
+     地址格式：
+       #/home
+       #/overview?ids=SC002,SC003
+       #/diff?old=SC005&new=SC006
+     追加 run=1 可在打开后自动运行分析，便于直接把报告链接发给别人。
+     视图切换走 pushState（可后退），勾选变化走 replaceState（不污染历史）；
+     两者均不触发 hashchange，因此不会与监听互相触发形成循环。 */
+  const VIEW_LABELS = { home: "首页", agent: "统一任务 Agent", overview: "一键综合评估", costlens: "真实融资成本分析", scenario: "合同情景比较", covenant: "契约监控预警", diff: "版本风险分析", library: "合同库" };
+  const VIEW_RUNNERS = {
+    overview: () => runOverview(), costlens: () => runCost(), scenario: () => runScenario(),
+    covenant: () => runCovenant(), diff: () => runDiff(), agent: () => runAgentTask(),
+  };
+  let appliedHash = "";
+  let bootApplied = false; // 本页是否已处理过地址栏：run=1 只在首次生效，后退不重复分析
+
+  function buildHash(view) {
+    const sel = state.selected;
+    if (view === "diff") {
+      const q = new URLSearchParams();
+      if (sel.old) q.set("old", sel.old);
+      if (sel.newer) q.set("new", sel.newer);
+      const tail = q.toString();
+      return "#/diff" + (tail ? "?" + tail : "");
+    }
+    const set = sel[view];
+    return set instanceof Set && set.size ? `#/${view}?ids=${[...set].join(",")}` : `#/${view}`;
+  }
+
+  // 生成「打开即自动出报告」的分享链接，供工具栏复制按钮使用
+  function shareUrl(view) {
+    const base = location.href.split("#")[0];
+    const hash = buildHash(view);
+    return base + hash + (hash.includes("?") ? "&" : "?") + "run=1";
+  }
+
+  function syncUrl(view, push, keepRun) {
+    let next = buildHash(view);
+    // 分享链接里的 run=1 在回写时保留，保证刷新后仍能自动出报告
+    if (keepRun) next += (next.includes("?") ? "&" : "?") + "run=1";
+    if (location.hash === next) return;
+    push ? history.pushState(null, "", next) : history.replaceState(null, "", next);
+    appliedHash = next;
+  }
+
+  function showView(name, opts = {}) {
+    state.view = name;
     $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
     $$(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.view === name));
-    const labels = { home: "首页", agent: "统一任务 Agent", overview: "一键综合评估", costlens: "真实融资成本分析", scenario: "合同情景比较", covenant: "契约监控预警", diff: "版本风险分析", library: "合同库" };
-    $("#page-title").textContent = labels[name] || "ContractGuard";
+    $("#page-title").textContent = VIEW_LABELS[name] || "ContractGuard";
     $("#view-container").scrollTo({ top: 0, behavior: "smooth" });
+    if (!opts.fromUrl) syncUrl(name, !opts.replace);
+  }
+
+  // 按地址栏还原视图与勾选；返回是否识别到有效 hash
+  function applyFromHash() {
+    const raw = (location.hash || "").replace(/^#\/?/, "");
+    if (!raw) return false;
+    if (location.hash === appliedHash) return true;
+    appliedHash = location.hash;
+
+    const [viewRaw, qs] = raw.split("?");
+    const view = VIEW_LABELS[viewRaw] ? viewRaw : "home";
+    const p = new URLSearchParams(qs || "");
+    const known = new Set(state.contracts.map((c) => c.id));
+
+    if (view === "diff") {
+      const oldId = p.get("old");
+      const newId = p.get("new");
+      if (oldId && known.has(oldId)) state.selected.old = oldId;
+      if (newId && known.has(newId)) state.selected.newer = newId;
+    } else {
+      const ids = (p.get("ids") || "").split(",").map((x) => x.trim()).filter((x) => known.has(x));
+      if (ids.length && state.selected[view] instanceof Set) state.selected[view] = new Set(ids);
+    }
+
+    renderPickers();
+    showView(view, { fromUrl: true });
+    // 用过滤后的合法状态回写地址，避免分享出去的链接带着已被删除的合同 ID
+    const wantRun = p.get("run") === "1";
+    syncUrl(view, false, wantRun);
+
+    if (wantRun && VIEW_RUNNERS[view] && !bootApplied) {
+      // 留出一帧让选择器渲染完成，再触发分析，避免读到旧的选择状态
+      setTimeout(() => { try { VIEW_RUNNERS[view](); } catch (e) { console.warn("自动运行失败", e); } }, 80);
+    }
+    bootApplied = true;
+    return true;
   }
 
   async function loadContracts() {
@@ -92,6 +175,7 @@
       else state.selected[key].has(id) ? state.selected[key].delete(id) : state.selected[key].add(id);
       renderPicker(selector, key, mode);
       if (key === "old" || key === "newer") lockDiffPickers();
+      syncUrl(state.view, false); // 勾选变化只改写当前历史条目，避免每次勾选都新增一条后退记录
     };
   }
 
@@ -689,7 +773,7 @@
     const reviewList = (o.review || []).map((r) => `<li>${esc(r)}</li>`).join("");
     const knowledgeCards = (d.knowledge || []).slice(0, 3).map((k) => `<div class="know-card"><b>${esc(k.title)}</b><p>${esc(k.text)}</p><a href="${esc(k.url)}" target="_blank" rel="noopener">来源：${esc(k.source)}</a></div>`).join("");
     // 报告导出工具栏：屏幕上显示，打印时由 print.css 隐藏
-    const toolbar = `<div class="report-toolbar"><div class="rt-note"><b>报告已生成</b><span>${ids.length} 份合同 · 四引擎联动 · 结论可回溯原文</span></div><button class="btn btn-ghost btn-sm" id="btn-print-report" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>导出打印版（A4 / PDF）</button></div>`;
+    const toolbar = `<div class="report-toolbar"><div class="rt-note"><b>报告已生成</b><span>${ids.length} 份合同 · 四引擎联动 · 结论可回溯原文</span></div><div class="rt-actions"><button class="btn btn-ghost btn-sm" id="btn-copy-link" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>复制报告链接</button><button class="btn btn-ghost btn-sm" id="btn-print-report" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>导出打印版（A4 / PDF）</button></div></div>`;
     return toolbar + `<section class="result-block"><div class="result-title">一键综合评估报告<span class="rt-tag">四引擎联动</span></div><div class="overview-top"><div class="ov-grade"><div class="ov-label">综合风险等级</div><div class="ov-value ${riskClass}">${esc(o.risk_level)}</div><div class="ov-sub">评分 ${o.risk_score}/100（越低越安全）· ${esc(o.method)}</div></div><div class="ov-grade"><div class="ov-label">性价比评估</div><div class="ov-value">${o.value_score}<small>/100</small></div><div class="ov-sub">分数越高代表融资成本与风险越优</div></div></div><div class="summary-banner ${riskClass === 'danger' ? 'red' : riskClass === 'warn' ? 'gold' : 'green'}"><div class="sb-icon">◆</div><div class="sb-body"><b>综合评价结论</b><p>${esc(o.conclusion)}</p></div></div><div class="ov-section"><div class="ov-sec-title">一、融资成本对比（Cost Lens）</div><table class="data-table"><thead><tr><th>合同</th><th>名义利率</th><th>综合成本率</th><th>真实年化成本</th><th>总融资成本</th></tr></thead><tbody>${costRows}</tbody></table>${bestCost ? `<div class="ov-tip"><b>成本优势合同：</b>${esc(bestCost.name)}，真实年化成本 ${rawPct(bestCost.result.real_annual_cost_pct)}</div>` : ""}</div><div class="ov-section"><div class="ov-sec-title">二、情景比较结论（Scenario Compare）</div><div class="ov-pair"><div><b>持有到期最优</b><span>${esc(d.scenario.hold[0].name)} · 总成本 ${money(d.scenario.hold[0].total_cost)}</span></div><div><b>提前还款最优</b><span>第 ${d.scenario.prepay_month} 个月 · ${esc(d.scenario.prepay[0].name)} · 总成本 ${money(d.scenario.prepay[0].total_cost)}</span></div></div><div class="ov-tip">${esc(flipText)}</div></div><div class="ov-section"><div class="ov-sec-title">三、契约监控（Covenant Guard）</div><div class="ov-cov">${covSummary || "所选合同未识别到财务契约条款。"}</div></div><div class="ov-section"><div class="ov-sec-title">四、版本风险（Contract Diff）</div><div class="ov-diff"><span>风险上升 <b class="danger">${d.diff.up_count}</b> 项</span><span>风险下降 <b class="good">${d.diff.down_count}</b> 项</span><span>需复核 <b class="warn">${d.diff.review_count}</b> 项</span><span>金额影响 <b class="danger">${esc(d.diff.total_impact_text)}</b></span></div></div><div class="ov-section"><div class="ov-sec-title">五、待复核事项</div><ul class="ov-review">${reviewList}</ul></div>${knowledgeCards ? `<div class="ov-section"><div class="ov-sec-title">六、金融知识与合规提示</div><div class="know-grid">${knowledgeCards}</div></div>` : ""}</section>`;
   }
 
@@ -741,6 +825,18 @@
     window.addEventListener("afterprint", restore);
     setTimeout(() => window.print(), 80);
     setTimeout(restore, 120000); // 兜底：个别浏览器不派发 afterprint
+  }
+
+  /* C2：复制「打开即自动出报告」的链接。
+     127.0.0.1 属安全上下文可用 Clipboard API；通过局域网 http 访问时会降级为弹窗手动复制。 */
+  async function copyReportLink() {
+    const url = shareUrl("overview");
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("链接已复制：队友打开后会自动生成同一份报告", "ok");
+    } catch (e) {
+      window.prompt("复制下面的链接，发给队友可直接打开这份报告：", url);
+    }
   }
 
   async function runAgentTask() {
@@ -946,7 +1042,10 @@
     $("#deterministic-only").onchange = async () => { await API.updateSecurity({deterministic_only:$("#deterministic-only").checked,external_scope:"masked_evidence_only"}); await refreshSecurity(); toast("数据处理策略已更新","ok"); };
     $("#btn-costlens-run").onclick = runCost; $("#btn-scenario-run").onclick = runScenario; $("#btn-covenant-run").onclick = runCovenant; $("#btn-diff-run").onclick = runDiff; $("#btn-overview-run").onclick = runOverview;
     // 委托绑定：结果区每次重渲染都会重建按钮，绑在容器上才不会失效
-    $("#overview-results").onclick = (e) => { if (e.target.closest("#btn-print-report")) printReport(); };
+    $("#overview-results").onclick = (e) => {
+      if (e.target.closest("#btn-print-report")) printReport();
+      else if (e.target.closest("#btn-copy-link")) copyReportLink();
+    };
     // 直接按 Cmd/Ctrl+P 时也补全报告页眉
     window.addEventListener("beforeprint", fillPrintHeader);
     $("#scenario-tabs").onclick = (e) => { const b = e.target.closest("button[data-s]"); if (!b) return; state.scenario = b.dataset.s; $$("button", $("#scenario-tabs")).forEach((x) => x.classList.toggle("active", x === b)); $("#param-prepay").style.display = state.scenario === "prepay" ? "flex" : "none"; $("#param-rate").style.display = state.scenario === "rate_up" ? "flex" : "none"; $("#param-stress").style.display = ["stress", "overdue"].includes(state.scenario) ? "flex" : "none"; };
@@ -998,6 +1097,10 @@
     bind(); clearFinancials();
     try { await Promise.all([loadContracts(), refreshAIStatus(), refreshSecurity(), refreshRuntimeStatus()]); } catch (e) { toast(`初始化失败：${e.message}`, "err"); }
     $("#view-container").scrollTop = 0;
+    // C2：先按地址栏还原视图与勾选；没有 hash 时补写一个，保证地址栏随时可复制分享
+    if (!applyFromHash()) syncUrl(state.view, false);
+    window.addEventListener("hashchange", applyFromHash);
+    window.addEventListener("popstate", applyFromHash);
   }
   document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", init) : init();
 })();

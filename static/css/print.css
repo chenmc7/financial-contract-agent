@@ -39,6 +39,7 @@
   border-radius: var(--radius-sm);
 }
 .report-toolbar .rt-note { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.report-toolbar .rt-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .report-toolbar .rt-note b { font-size: 13px; color: var(--text); }
 .report-toolbar .rt-note span { font-size: 11.5px; color: var(--text-3); }
 .report-toolbar #btn-print-report {
