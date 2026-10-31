@@ -11,6 +11,8 @@
     transactionSelections: {},
     demoRunning: false,
     demoSkipped: false,
+    lastOverview: null, // 最近一次综合评估结果，打印导出时用于生成报告页眉
+    view: "home", // 当前视图，C2 用于把状态同步进地址栏
   };
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
@@ -23,7 +25,9 @@
     return n.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) + " 元";
   };
   const pct = (v, digits = 2) => Number.isFinite(Number(v)) ? (Number(v) * 100).toFixed(digits) + "%" : "-";
-  const rawPct = (v, digits = 2) => Number.isFinite(Number(v)) ? Number(v).toFixed(digits) + "%" : "-";
+  // 缺值（null/undefined/空串）一律显示「—」：0.00% 会被误读成"零成本"，
+  // 例如 IRR 无解时 real_annual_cost_pct 为 null，不能回落成 0.00%。
+  const rawPct = (v, digits = 2) => (v === null || v === undefined || v === "") ? "—" : (Number.isFinite(Number(v)) ? Number(v).toFixed(digits) + "%" : "—");
 
   function toast(message, kind = "info") {
     const node = document.createElement("div");
@@ -39,12 +43,94 @@
     else { button.textContent = button.dataset.label || button.textContent; button.disabled = false; }
   }
 
-  function showView(name) {
+  /* ══ C2：视图状态进 URL ══
+     地址格式：
+       #/home
+       #/overview?ids=SC002,SC003
+       #/diff?old=SC005&new=SC006
+     追加 run=1 可在打开后自动运行分析，便于直接把报告链接发给别人。
+     视图切换走 pushState（可后退），勾选变化走 replaceState（不污染历史）；
+     两者均不触发 hashchange，因此不会与监听互相触发形成循环。 */
+  const VIEW_LABELS = { home: "首页", agent: "统一任务 Agent", overview: "一键综合评估", costlens: "真实融资成本分析", scenario: "合同情景比较", covenant: "契约监控预警", diff: "版本风险分析", library: "合同库" };
+  const VIEW_RUNNERS = {
+    overview: () => runOverview(), costlens: () => runCost(), scenario: () => runScenario(),
+    covenant: () => runCovenant(), diff: () => runDiff(), agent: () => runAgentTask(),
+  };
+  let appliedHash = "";
+  let bootApplied = false; // 本页是否已处理过地址栏：run=1 只在首次生效，后退不重复分析
+
+  function buildHash(view) {
+    const sel = state.selected;
+    if (view === "diff") {
+      const q = new URLSearchParams();
+      if (sel.old) q.set("old", sel.old);
+      if (sel.newer) q.set("new", sel.newer);
+      const tail = q.toString();
+      return "#/diff" + (tail ? "?" + tail : "");
+    }
+    const set = sel[view];
+    return set instanceof Set && set.size ? `#/${view}?ids=${[...set].join(",")}` : `#/${view}`;
+  }
+
+  // 生成「打开即自动出报告」的分享链接，供工具栏复制按钮使用
+  function shareUrl(view) {
+    const base = location.href.split("#")[0];
+    const hash = buildHash(view);
+    return base + hash + (hash.includes("?") ? "&" : "?") + "run=1";
+  }
+
+  function syncUrl(view, push, keepRun) {
+    let next = buildHash(view);
+    // 分享链接里的 run=1 在回写时保留，保证刷新后仍能自动出报告
+    if (keepRun) next += (next.includes("?") ? "&" : "?") + "run=1";
+    if (location.hash === next) return;
+    push ? history.pushState(null, "", next) : history.replaceState(null, "", next);
+    appliedHash = next;
+  }
+
+  function showView(name, opts = {}) {
+    state.view = name;
     $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
     $$(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.view === name));
-    const labels = { home: "首页", agent: "统一任务 Agent", overview: "一键综合评估", costlens: "真实融资成本分析", scenario: "合同情景比较", covenant: "契约监控预警", diff: "版本风险分析", library: "合同库" };
-    $("#page-title").textContent = labels[name] || "ContractGuard";
+    $("#page-title").textContent = VIEW_LABELS[name] || "ContractGuard";
     $("#view-container").scrollTo({ top: 0, behavior: "smooth" });
+    if (!opts.fromUrl) syncUrl(name, !opts.replace);
+  }
+
+  // 按地址栏还原视图与勾选；返回是否识别到有效 hash
+  function applyFromHash() {
+    const raw = (location.hash || "").replace(/^#\/?/, "");
+    if (!raw) return false;
+    if (location.hash === appliedHash) return true;
+    appliedHash = location.hash;
+
+    const [viewRaw, qs] = raw.split("?");
+    const view = VIEW_LABELS[viewRaw] ? viewRaw : "home";
+    const p = new URLSearchParams(qs || "");
+    const known = new Set(state.contracts.map((c) => c.id));
+
+    if (view === "diff") {
+      const oldId = p.get("old");
+      const newId = p.get("new");
+      if (oldId && known.has(oldId)) state.selected.old = oldId;
+      if (newId && known.has(newId)) state.selected.newer = newId;
+    } else {
+      const ids = (p.get("ids") || "").split(",").map((x) => x.trim()).filter((x) => known.has(x));
+      if (ids.length && state.selected[view] instanceof Set) state.selected[view] = new Set(ids);
+    }
+
+    renderPickers();
+    showView(view, { fromUrl: true });
+    // 用过滤后的合法状态回写地址，避免分享出去的链接带着已被删除的合同 ID
+    const wantRun = p.get("run") === "1";
+    syncUrl(view, false, wantRun);
+
+    if (wantRun && VIEW_RUNNERS[view] && !bootApplied) {
+      // 留出一帧让选择器渲染完成，再触发分析，避免读到旧的选择状态
+      setTimeout(() => { try { VIEW_RUNNERS[view](); } catch (e) { console.warn("自动运行失败", e); } }, 80);
+    }
+    bootApplied = true;
+    return true;
   }
 
   async function loadContracts() {
@@ -57,14 +143,26 @@
 
   function contractMeta(c) {
     const bits = [];
-    if (c.principal) bits.push(money(c.principal));
-    if (c.annual_rate != null) bits.push(pct(c.annual_rate));
+    bits.push(c.principal ? money(c.principal) : "—");
+    bits.push(c.annual_rate != null ? pct(c.annual_rate) : "—");
     bits.push(c.confidence >= .67 ? `<span class="ok">置信度 ${Math.round(c.confidence * 100)}%</span>` : `<span class="miss">需复核 ${Math.round((c.confidence || 0) * 100)}%</span>`);
     return bits.join(" · ");
   }
 
   function pickerHtml(c, selected, mode) {
     return `<button type="button" class="cp-item ${selected ? (mode === 'single' ? 'single-selected' : 'selected') : ''}" data-id="${esc(c.id)}"><span class="cp-check">${selected ? "✓" : ""}</span><span class="cp-info"><span class="cp-name">${esc(c.name)}</span><span class="cp-meta">${contractMeta(c)}</span></span></button>`;
+  }
+
+  function lockDiffPickers() {
+    // 同一份合同不能同时作为旧版与新版；仅禁用另一侧已占用的卡片，不改变选择状态。
+    [["#diff-old-picker", state.selected.newer], ["#diff-new-picker", state.selected.old]].forEach(([sel, taken]) => {
+      $$(sel + " .cp-item").forEach((el) => {
+        const locked = !!taken && el.dataset.id === taken;
+        el.disabled = locked;
+        el.classList.toggle("cp-locked", locked);
+        if (locked) el.title = "已作为另一侧版本选中";
+      });
+    });
   }
 
   function renderPicker(selector, key, mode = "multi") {
@@ -76,6 +174,8 @@
       if (mode === "single") state.selected[key] = id;
       else state.selected[key].has(id) ? state.selected[key].delete(id) : state.selected[key].add(id);
       renderPicker(selector, key, mode);
+      if (key === "old" || key === "newer") lockDiffPickers();
+      syncUrl(state.view, false); // 勾选变化只改写当前历史条目，避免每次勾选都新增一条后退记录
     };
   }
 
@@ -87,6 +187,7 @@
     renderPicker("#overview-picker", "overview");
     renderPicker("#diff-old-picker", "old", "single");
     renderPicker("#diff-new-picker", "newer", "single");
+    lockDiffPickers();
   }
 
   function updateStats() {
@@ -213,12 +314,13 @@
     return html;
   }
 
-  function transactionHtml(transactions, documentType, transactionType) {
+  function transactionHtml(transactions, documentType, transactionType, fallbackAmount) {
     const list = transactions || [];
     if (!list.length) return '<div class="transaction-panel"><span class="hint-text">未检测到可独立归属的融资交易。</span></div>';
     const selected = state.transactionSelections[state.currentContract] || list[0].transaction_id;
     const options = list.map((t) => {
-      const amount = t.primary && t.primary.amount ? money(t.primary.amount.value) : "金额待复核";
+      const amountValue = t.primary && t.primary.amount ? t.primary.amount.value : fallbackAmount;
+      const amount = amountValue != null ? money(amountValue) : "金额待复核";
       const term = t.term_change ? `${t.term_change.from} → ${t.term_change.to} 个月` : t.primary && t.primary.term && t.primary.term.value ? `${t.primary.term.value} 个月` : "期限待复核";
       return `<option value="${esc(t.transaction_id)}" ${t.transaction_id === selected ? "selected" : ""}>${esc(t.label || t.transaction_id)} · ${esc(amount)} · ${esc(term)}</option>`;
     }).join("");
@@ -343,18 +445,119 @@
       + '<ul class="diag-lines">' + (d.text || []).map((l) => "<li>" + esc(l) + "</li>").join("") + "</ul>";
   }
 
+  const PARSE_STATUS_TEXT = { success: "解析成功", needs_text_version: "需文本版", failed: "解析失败", error: "解析失败" };
+
   function fileDiagnosticsHtml(d) {
     if (!d || !Object.keys(d).length) return "";
-    const pos = d.pages == null ? (d.page_note || "使用文本位置") : `${d.pages} 页`;
+    const fmt = (d.format || "text").toUpperCase();
+    const posRaw = d.pages == null ? (d.page_note || "使用文本位置") : `${d.pages} 页`;
+    // 页注已带格式名时去掉重复前缀，避免出现“DOCX · DOCX …”
+    const pos = d.pages == null && posRaw.toUpperCase().startsWith(fmt)
+      ? posRaw.slice(fmt.length).replace(/^[\s·:：-]+/, "") : posRaw;
+    const statusText = PARSE_STATUS_TEXT[d.status] || d.status || "解析成功";
     const warns = (d.warnings || []).map((x) => `<span class="diag-warning">${esc(x)}</span>`).join("");
-    return `<div class="file-diagnostics"><b>文件解析状态</b><span class="badge badge-green">${esc(d.status || "success")}</span><span>${esc((d.format || "text").toUpperCase())}</span><span>${esc(pos)}</span><span>OCR ${d.ocr_page_count || 0} 页</span><span>表格 ${d.table_count || 0}</span><span>低质量页 ${(d.low_quality_pages || []).length}</span><span>敏感信息命中 ${d.sensitive_matches || 0}</span>${warns}</div>`;
+    return `<div class="file-diagnostics"><b>文件解析状态</b><span class="badge badge-green">${esc(statusText)}</span><span>${esc(fmt)}</span><span>${esc(pos)}</span><span>OCR ${d.ocr_page_count || 0} 页</span><span>表格 ${d.table_count || 0}</span><span>低质量页 ${(d.low_quality_pages || []).length}</span><span>敏感信息命中 ${d.sensitive_matches || 0}</span>${warns}</div>`;
+  }
+
+  /* ═══ 复核状态表：必须与后端 POST /api/contracts/{cid}/reviews/{item_id} 的 allowed 集合一致 ═══
+     backend: submitted_legal / confirmed / accepted_risk / pending / material_change / wording_only */
+  const REVIEW_STATES = [
+    { key: "pending", label: "待处理", tone: "na", hint: "已登记，尚未处理" },
+    { key: "confirmed", label: "已确认", tone: "ok", hint: "已核对原文，采信该结论" },
+    { key: "accepted_risk", label: "接受风险", tone: "warn", hint: "确认存在该风险，业务上决定接受" },
+    { key: "material_change", label: "实质变更", tone: "danger", hint: "条款构成实质性变更，需重新评估" },
+    { key: "wording_only", label: "仅措辞", tone: "muted", hint: "仅措辞调整，经济含义未变" },
+    { key: "submitted_legal", label: "提交法务", tone: "legal", hint: "转专业法律人员复核" },
+  ];
+  const REVIEW_LABEL = REVIEW_STATES.reduce((m, s) => (m[s.key] = s.label, m), {});
+  const REVIEW_TONE = REVIEW_STATES.reduce((m, s) => (m[s.key] = s.tone, m), {});
+  const reviewLabel = (k) => REVIEW_LABEL[k] || k || "";
+
+  /* 复核时间戳是 time.time() 秒值，转成本地可读时间 */
+  function fmtStamp(ts) {
+    if (!ts) return "";
+    const d = new Date(Number(ts) * 1000);
+    if (Number.isNaN(d.getTime())) return "";
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   }
 
   function reviewHtml(orch, reviewStatus = {}) {
     const items = (orch && orch.review) || [];
     if (!items.length) return '<div class="hint-text">本轮解析无待复核项：字段置信度、类型判定与冲突检查均达阈值。</div>';
     const TYPE_ICON = { uncertain_field: "◐", conflict_field: "⨯", low_type_confidence: "◇", legal_review: "⚖" };
-    return '<ul class="review-list">' + items.map((it, i) => `<li class="rv-${esc(it.type)}" data-review-id="${esc(it.source || (`review-${i}`))}"><span class="rv-ic">${TYPE_ICON[it.type] || "•"}</span><div><b>${esc(it.label)}</b><p>${esc(it.text)}</p><div class="review-actions"><button data-review-status="submitted_legal">已提交法务</button><button data-review-status="confirmed">已确认</button><button data-review-status="accepted_risk">接受风险</button></div></div></li>`).join("") + "</ul>";
+    const itemId = (it, i) => it.source || `review-${i}`;
+    const isHandled = (saved) => !!(saved && saved.status && saved.status !== "pending");
+    const doneCount = items.filter((it, i) => isHandled(reviewStatus[itemId(it, i)])).length;
+    const pctDone = items.length ? Math.round((doneCount / items.length) * 100) : 0;
+    const progress = `<div class="rv-progress"><span class="rvp-label">复核进度</span><b>${doneCount}</b><span class="rvp-sep">/</span><span>${items.length} 项</span><div class="rvp-bar"><i style="width:${pctDone}%"></i></div><span class="rvp-pct">${pctDone}%</span></div>`;
+
+    const rows = items.map((it, i) => {
+      const id = itemId(it, i);
+      const saved = reviewStatus[id] || {};
+      const buttons = REVIEW_STATES.map((s) => {
+        const on = saved.status === s.key;
+        return `<button type="button" data-review-status="${s.key}" title="${esc(s.hint)}"${on ? ` class="active tone-${s.tone}" aria-pressed="true"` : ""}>${esc(s.label)}</button>`;
+      }).join("");
+      const badge = saved.status
+        ? `<div class="rv-meta"><span class="rv-badge tone-${REVIEW_TONE[saved.status] || "na"}">${esc(reviewLabel(saved.status))}</span>`
+          + (saved.updated_at ? `<time class="rv-time">${esc(fmtStamp(saved.updated_at))}</time>` : "")
+          + (saved.note ? `<span class="rv-note-text" title="${esc(saved.note)}">备注：${esc(saved.note)}</span>` : "")
+          + `</div>`
+        : `<div class="rv-meta"><span class="rv-badge tone-na">未复核</span></div>`;
+      return `<li class="rv-${esc(it.type)}" data-review-id="${esc(id)}" data-review-current="${esc(saved.status || "")}">`
+        + `<span class="rv-ic">${TYPE_ICON[it.type] || "•"}</span>`
+        + `<div class="rv-body"><b>${esc(it.label)}</b><p>${esc(it.text)}</p>${badge}`
+        + `<div class="review-actions">${buttons}</div>`
+        + `<div class="rv-notebox"><input type="text" class="rv-note-input" maxlength="200" value="${esc(saved.note || "")}" placeholder="复核备注（选填，回车保存）" aria-label="复核备注"></div>`
+        + `</div></li>`;
+    }).join("");
+    return progress + '<ul class="review-list">' + rows + "</ul>";
+  }
+
+  /* 把复核状态写回 DOM：页面加载回显与保存后即时刷新共用，保证两条路径表现一致 */
+  function applyReviewState(li, saved) {
+    if (!li) return;
+    const status = (saved && saved.status) || "";
+    const note = (saved && saved.note) || "";
+    li.dataset.reviewCurrent = status;
+    li.classList.toggle("review-done", !!status && status !== "pending");
+    const meta = li.querySelector(".rv-meta");
+    if (meta) {
+      meta.innerHTML = status
+        ? `<span class="rv-badge tone-${REVIEW_TONE[status] || "na"}">${esc(reviewLabel(status))}</span>`
+          + (saved.updated_at ? `<time class="rv-time">${esc(fmtStamp(saved.updated_at))}</time>` : "")
+          + (note ? `<span class="rv-note-text" title="${esc(note)}">备注：${esc(note)}</span>` : "")
+        : `<span class="rv-badge tone-na">未复核</span>`;
+    }
+    li.querySelectorAll("[data-review-status]").forEach((b) => {
+      const on = b.dataset.reviewStatus === status;
+      b.classList.toggle("active", on);
+      if (on) b.setAttribute("aria-pressed", "true"); else b.removeAttribute("aria-pressed");
+    });
+  }
+
+  /* 复核进度条随状态变化重算 */
+  function refreshReviewProgress() {
+    const box = $("#contract-detail .rv-progress");
+    const lis = $$("#contract-detail .review-list li");
+    if (!box || !lis.length) return;
+    const done = lis.filter((li) => li.dataset.reviewCurrent && li.dataset.reviewCurrent !== "pending").length;
+    const pct = Math.round((done / lis.length) * 100);
+    const num = box.querySelector("b"); if (num) num.textContent = done;
+    const bar = box.querySelector(".rvp-bar i"); if (bar) bar.style.width = pct + "%";
+    const label = box.querySelector(".rvp-pct"); if (label) label.textContent = pct + "%";
+  }
+
+  /* 提交复核状态：后端持久化 → 回写 DOM → 同步内存里的详情，切换视图回来也不会丢 */
+  async function submitReview(li, status, note) {
+    if (!li || !status) return null;
+    await API.updateReview(state.currentContract, li.dataset.reviewId, { status, note: note || "" });
+    const saved = { status, note: note || "", updated_at: Date.now() / 1000 };
+    applyReviewState(li, saved);
+    refreshReviewProgress();
+    if (state.currentDetail && state.currentDetail.review_status) state.currentDetail.review_status[li.dataset.reviewId] = saved;
+    return saved;
   }
 
   async function showContract(id) {
@@ -391,7 +594,7 @@
         + "</div></div>"
         /* ── 右栏：结构化分析 ── */
         + '<div class="cd-right">'
-        + transactionHtml(transactions, c.document_type || c.fields?.document_type?.display, c.transaction_type || c.fields?.transaction_type?.display)
+        + transactionHtml(transactions, c.document_type || c.fields?.document_type?.display, c.transaction_type || c.fields?.transaction_type?.display, c.principal)
         /* 1. 合同核心信息（事实层） */
         + layerTitle("合同核心信息 · 字段证据绑定", "fact")
         + '<div class="term-grid">'
@@ -428,8 +631,9 @@
       if (txSelect) txSelect.onchange = () => { state.transactionSelections[id] = txSelect.value; const tx = transactions.find((t) => t.transaction_id === txSelect.value); const detail = document.getElementById("transaction-detail"); if (detail) detail.innerHTML = transactionDetailHtml(tx); toast("已切换交易；成本测算将只使用当前交易字段", "info"); };
       Object.entries(data.review_status || {}).forEach(([id, saved]) => {
         const row = $$("[data-review-id]", $("#contract-detail")).find((x) => x.dataset.reviewId === id);
-        if (row && saved.status) { row.classList.add("review-done"); const note = document.createElement("small"); note.className = "review-saved"; note.textContent = `已保存：${saved.status}`; row.querySelector("div > div")?.appendChild(note); }
+        if (row && saved && saved.status) applyReviewState(row, saved);
       });
+      refreshReviewProgress();
       $("#contract-detail").scrollIntoView({ behavior: "smooth", block: "start" });
       $$("#contract-detail .frow[data-clause]").forEach((row) => row.addEventListener("click", () => bindEvidence(row)));
     } catch (e) { toast(e.message, "err"); }
@@ -458,16 +662,18 @@
     }
     if (r.error) return `<div class="result-block"><div class="result-title">${esc(a.name)}</div><div class="summary-banner red"><div class="sb-icon">⚠</div><div class="sb-body"><b>暂时无法计算</b><p>${esc(r.error)}。请在原文中复核金额、利率和期限。</p></div></div></div>`;
     const items = (r.cost_items || []).map((x) => ({ label: x.name, value: x.amount, display: money(x.amount) }));
-    const flows = (r.cashflows || []).filter((_, i, arr) => i === 0 || i === arr.length - 1 || i % Math.max(1, Math.floor(arr.length / 5)) === 0).map((f) => ({ label: `第${f.period}期`, value: f.total, display: money(f.total) }));
+    const cashflows = r.cashflows || [];
+    const flowUnit = r.repayment === "按季付息、分期还本" ? "季" : "期";
     const statusLabels = { confirmed: "已确认", confirmed_by_user: "用户已确认", uncertain: "待复核", not_found: "未发现", not_applicable: "不适用", conflict: "存在冲突" };
     const meaningfulItems = items.filter((x) => Number(x.value) > 0);
     const showCostChart = meaningfulItems.length > 1 && new Set(meaningfulItems.map((x) => Number(x.value).toFixed(2))).size > 1;
-    const showFlowChart = flows.length > 1 && new Set(flows.map((x) => Number(x.value).toFixed(2))).size > 1;
     const costChart = showCostChart ? CGCharts.bars(meaningfulItems, { label: "成本项目对比" }) : "";
-    const flowChart = showFlowChart ? CGCharts.line(flows, { label: "还款现金流" }) : '<div class="hint-text">各展示期还款金额一致，已省略无变化曲线。</div>';
+    const flowChart = cashflows.length > 1
+      ? CGCharts.flow(cashflows, { unit: flowUnit, label: `${a.name} 逐期还款现金流结构` })
+      : '<div class="hint-text">该合同未生成逐期还款计划，无法绘制现金流曲线。请在原文复核还款方式或期限。</div>';
     const feeTrend = Number(r.rate_gap_pp) > 0 ? `<div class="k-trend up">固定费用占本金 +${rawPct(r.rate_gap_pp, 2).replace('%','')} pp</div>` : '<div class="k-sub">未识别到固定费用</div>';
     const inputRows = (r.inputs || []).map((x) => `<tr><td>${esc(x.label)}</td><td>${esc(x.normalized ?? "待复核")}</td><td>${esc(x.source_text || "未定位")}</td><td>${esc(x.clause || (x.page ? `第${x.page}页` : "文本位置"))}</td><td>${esc(x.formula_role)}</td><td><span class="status-badge st-${esc(x.status)}">${esc(statusLabels[x.status] || "未知状态")}</span></td></tr>`).join("");
-    return `<section class="result-block"><div class="result-title">${esc(a.name)}<span class="rt-tag">Cost Lens</span></div><div class="kpi-grid"><div class="kpi"><div class="k-label">名义年利率</div><div class="k-value">${pct(r.annual_rate)}</div><div class="k-sub">合同表面利率</div></div><div class="kpi"><div class="k-label">期限内总成本率</div><div class="k-value hl">${rawPct(r.comprehensive_rate_pct)}</div>${feeTrend}<div class="k-sub">（总利息 + 固定费用）/ 本金，非年化口径</div></div><div class="kpi"><div class="k-label">真实年化成本</div><div class="k-value warn">${rawPct(r.real_annual_cost_pct)}</div><div class="k-sub">基于净到手资金的 IRR</div></div><div class="kpi"><div class="k-label">总融资成本</div><div class="k-value">${money(r.total_cost)}</div><div class="k-sub">其中费用 ${money(r.total_fees)}</div></div></div><div class="summary-banner gold"><div class="sb-icon">✦</div><div class="sb-body"><b>确定性引擎结论</b><p>${esc(r.summary)}</p></div></div><div class="result-title">计算输入与可复核证据</div><table class="data-table"><thead><tr><th>输入</th><th>标准化值</th><th>原文证据</th><th>位置</th><th>计算用途</th><th>状态</th></tr></thead><tbody>${inputRows}</tbody></table><div class="formula-box">R<sub>cost</sub> = <span class="fx-var">(I + F + P) / N</span><span class="fx-note">本案 = (${money(r.total_interest)} + ${money(r.total_fees)} + 0) / ${money(r.principal)}</span></div><div class="result-title">成本拆解与原文证据</div><table class="data-table"><thead><tr><th>项目</th><th>金额</th><th>计算或条款位置</th></tr></thead><tbody>${(r.cost_items || []).map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${money(x.amount)}</td><td>${esc(x.detail || x.clause || "")}</td></tr>`).join("")}</tbody></table>${costChart}<div class="result-title">还款现金流节点</div>${flowChart}</section>`;
+    return `<section class="result-block"><div class="result-title">${esc(a.name)}<span class="rt-tag">Cost Lens</span></div><div class="kpi-grid"><div class="kpi"><div class="k-label">名义年利率</div><div class="k-value">${pct(r.annual_rate)}</div><div class="k-sub">合同表面利率</div></div><div class="kpi"><div class="k-label">期限内总成本率</div><div class="k-value hl">${rawPct(r.comprehensive_rate_pct)}</div>${feeTrend}<div class="k-sub">（总利息 + 固定费用）/ 本金，非年化口径</div></div><div class="kpi"><div class="k-label">真实年化成本</div><div class="k-value warn">${rawPct(r.real_annual_cost_pct)}</div><div class="k-sub">${r.real_annual_cost_pct === null || r.real_annual_cost_pct === undefined ? esc(r.real_annual_cost_note || "IRR 无解") : "基于净到手资金的 IRR"}</div></div><div class="kpi"><div class="k-label">总融资成本</div><div class="k-value">${money(r.total_cost)}</div><div class="k-sub">其中费用 ${money(r.total_fees)}</div></div></div><div class="summary-banner gold"><div class="sb-icon">✦</div><div class="sb-body"><b>确定性引擎结论</b><p>${esc(r.summary)}</p></div></div><div class="result-title">计算输入与可复核证据</div><table class="data-table"><thead><tr><th>输入</th><th>标准化值</th><th>原文证据</th><th>位置</th><th>计算用途</th><th>状态</th></tr></thead><tbody>${inputRows}</tbody></table><div class="formula-box">R<sub>cost</sub> = <span class="fx-var">(I + F + P) / N</span><span class="fx-note">本案 = (${money(r.total_interest)} + ${money(r.total_fees)} + 0) / ${money(r.principal)}</span></div><div class="result-title">成本拆解与原文证据</div><table class="data-table"><thead><tr><th>项目</th><th>金额</th><th>计算或条款位置</th></tr></thead><tbody>${(r.cost_items || []).map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${money(x.amount)}</td><td>${esc(x.detail || x.clause || "")}</td></tr>`).join("")}</tbody></table>${costChart}<div class="result-title">逐期还款现金流<span class="rt-tag">全部 ${cashflows.length} ${flowUnit}</span></div>${flowChart}</section>`;
   }
 
   async function runScenario() {
@@ -563,7 +769,8 @@
   function addFinRow(values = ["新季度", 0, 0, 0, 0]) {
     const tr = document.createElement("tr");
     const rowValues = Array.from({ length: 6 }, (_, i) => values[i] ?? "");
-    tr.innerHTML = rowValues.map((v, i) => `<td><input ${i ? 'type="number" min="0" step="10000"' : 'type="text"'} value="${esc(v)}" aria-label="${['季度','总负债','总资产','流动资产','流动负债','速动资产'][i]}"></td>`).join("") + '<td><button class="del-btn" type="button">移除</button></td>';
+    const ph = ["如 2026Q1", "如 120000000", "如 200000000", "如 108000000", "如 92000000", "如 106000000"];
+    tr.innerHTML = rowValues.map((v, i) => `<td><input ${i ? 'type="number" min="0" step="10000"' : 'type="text"'} value="${esc(v)}" placeholder="${ph[i]}" aria-label="${['季度','总负债','总资产','流动资产','流动负债','速动资产'][i]}"></td>`).join("") + '<td><button class="del-btn" type="button">移除</button></td>';
     $("#fin-tbody").appendChild(tr);
   }
   function clearFinancials() { $("#fin-tbody").innerHTML = ""; }
@@ -643,6 +850,7 @@
     try {
       const data = await API.comprehensive({ contract_ids: ids, prepay_month: +$("#param-month")?.value || 12 });
       root.innerHTML = renderOverview(data, ids);
+      state.lastOverview = { data, ids };
       state.aiContext = `综合评价：${data.overall.conclusion}\n风险等级：${data.overall.risk_level}（${data.overall.risk_score}/100）\n性价比评分：${data.overall.value_score}/100\n`;
     } catch (e) { root.innerHTML = ""; toast(e.message, "err"); }
     finally { busy(button, false); }
@@ -661,7 +869,71 @@
     const covSummary = (d.covenants || []).map((c) => `<span>${esc(c.name)}：安全 ${c.summary.safe} · 接近阈值 ${c.summary.near} · 已触发 ${c.summary.triggered}</span>`).join("");
     const reviewList = (o.review || []).map((r) => `<li>${esc(r)}</li>`).join("");
     const knowledgeCards = (d.knowledge || []).slice(0, 3).map((k) => `<div class="know-card"><b>${esc(k.title)}</b><p>${esc(k.text)}</p><a href="${esc(k.url)}" target="_blank" rel="noopener">来源：${esc(k.source)}</a></div>`).join("");
-    return `<section class="result-block"><div class="result-title">一键综合评估报告<span class="rt-tag">四引擎联动</span></div><div class="overview-top"><div class="ov-grade"><div class="ov-label">综合风险等级</div><div class="ov-value ${riskClass}">${esc(o.risk_level)}</div><div class="ov-sub">评分 ${o.risk_score}/100 · ${esc(o.method)}</div></div><div class="ov-grade"><div class="ov-label">性价比评估</div><div class="ov-value">${o.value_score}<small>/100</small></div><div class="ov-sub">分数越高代表融资成本与风险越优</div></div></div><div class="summary-banner ${riskClass === 'danger' ? 'red' : riskClass === 'warn' ? 'gold' : 'green'}"><div class="sb-icon">◆</div><div class="sb-body"><b>综合评价结论</b><p>${esc(o.conclusion)}</p></div></div><div class="ov-section"><div class="ov-sec-title">一、融资成本对比（Cost Lens）</div><table class="data-table"><thead><tr><th>合同</th><th>名义利率</th><th>综合成本率</th><th>真实年化成本</th><th>总融资成本</th></tr></thead><tbody>${costRows}</tbody></table>${bestCost ? `<div class="ov-tip"><b>成本优势合同：</b>${esc(bestCost.name)}，真实年化成本 ${rawPct(bestCost.result.real_annual_cost_pct)}</div>` : ""}</div><div class="ov-section"><div class="ov-sec-title">二、情景比较结论（Scenario Compare）</div><div class="ov-pair"><div><b>持有到期最优</b><span>${esc(d.scenario.hold[0].name)} · 总成本 ${money(d.scenario.hold[0].total_cost)}</span></div><div><b>提前还款最优</b><span>第 ${d.scenario.prepay_month} 个月 · ${esc(d.scenario.prepay[0].name)} · 总成本 ${money(d.scenario.prepay[0].total_cost)}</span></div></div><div class="ov-tip">${esc(flipText)}</div></div><div class="ov-section"><div class="ov-sec-title">三、契约监控（Covenant Guard）</div><div class="ov-cov">${covSummary || "所选合同未识别到财务契约条款。"}</div></div><div class="ov-section"><div class="ov-sec-title">四、版本风险（Contract Diff）</div><div class="ov-diff"><span>风险上升 <b class="danger">${d.diff.up_count}</b> 项</span><span>风险下降 <b class="good">${d.diff.down_count}</b> 项</span><span>需复核 <b class="warn">${d.diff.review_count}</b> 项</span><span>金额影响 <b class="danger">${esc(d.diff.total_impact_text)}</b></span></div></div><div class="ov-section"><div class="ov-sec-title">五、待复核事项</div><ul class="ov-review">${reviewList}</ul></div>${knowledgeCards ? `<div class="ov-section"><div class="ov-sec-title">六、金融知识与合规提示</div><div class="know-grid">${knowledgeCards}</div></div>` : ""}</section>`;
+    // 报告导出工具栏：屏幕上显示，打印时由 print.css 隐藏
+    const toolbar = `<div class="report-toolbar"><div class="rt-note"><b>报告已生成</b><span>${ids.length} 份合同 · 四引擎联动 · 结论可回溯原文</span></div><div class="rt-actions"><button class="btn btn-ghost btn-sm" id="btn-copy-link" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>复制报告链接</button><button class="btn btn-ghost btn-sm" id="btn-print-report" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>导出打印版（A4 / PDF）</button></div></div>`;
+    return toolbar + `<section class="result-block"><div class="result-title">一键综合评估报告<span class="rt-tag">四引擎联动</span></div><div class="overview-top"><div class="ov-grade"><div class="ov-label">综合风险等级</div><div class="ov-value ${riskClass}">${esc(o.risk_level)}</div><div class="ov-sub">评分 ${o.risk_score}/100（越低越安全）· ${esc(o.method)}</div></div><div class="ov-grade"><div class="ov-label">性价比评估</div><div class="ov-value">${o.value_score}<small>/100</small></div><div class="ov-sub">分数越高代表融资成本与风险越优</div></div></div><div class="summary-banner ${riskClass === 'danger' ? 'red' : riskClass === 'warn' ? 'gold' : 'green'}"><div class="sb-icon">◆</div><div class="sb-body"><b>综合评价结论</b><p>${esc(o.conclusion)}</p></div></div><div class="ov-section"><div class="ov-sec-title">一、融资成本对比（Cost Lens）</div><table class="data-table"><thead><tr><th>合同</th><th>名义利率</th><th>综合成本率</th><th>真实年化成本</th><th>总融资成本</th></tr></thead><tbody>${costRows}</tbody></table>${bestCost ? `<div class="ov-tip"><b>成本优势合同：</b>${esc(bestCost.name)}，真实年化成本 ${rawPct(bestCost.result.real_annual_cost_pct)}</div>` : ""}</div><div class="ov-section"><div class="ov-sec-title">二、情景比较结论（Scenario Compare）</div><div class="ov-pair"><div><b>持有到期最优</b><span>${esc(d.scenario.hold[0].name)} · 总成本 ${money(d.scenario.hold[0].total_cost)}</span></div><div><b>提前还款最优</b><span>第 ${d.scenario.prepay_month} 个月 · ${esc(d.scenario.prepay[0].name)} · 总成本 ${money(d.scenario.prepay[0].total_cost)}</span></div></div><div class="ov-tip">${esc(flipText)}</div></div><div class="ov-section"><div class="ov-sec-title">三、契约监控（Covenant Guard）</div><div class="ov-cov">${covSummary || "所选合同未识别到财务契约条款。"}</div></div><div class="ov-section"><div class="ov-sec-title">四、版本风险（Contract Diff）</div><div class="ov-diff"><span>风险上升 <b class="danger">${d.diff.up_count}</b> 项</span><span>风险下降 <b class="good">${d.diff.down_count}</b> 项</span><span>需复核 <b class="warn">${d.diff.review_count}</b> 项</span><span>金额影响 <b class="danger">${esc(d.diff.total_impact_text)}</b></span></div></div><div class="ov-section"><div class="ov-sec-title">五、待复核事项</div><ul class="ov-review">${reviewList}</ul></div>${knowledgeCards ? `<div class="ov-section"><div class="ov-sec-title">六、金融知识与合规提示</div><div class="know-grid">${knowledgeCards}</div></div>` : ""}</section>`;
+  }
+
+  /* ══ C1：综合评估报告导出打印版 ══
+     走浏览器原生打印（与 Cmd/Ctrl+P 同一通道），不依赖服务端 PDF 组件：
+     离线可用、零额外依赖、图表以矢量输出。打印版式全部由 css/print.css 提供。 */
+  function reportStamp() {
+    const d = new Date(), p = (n) => String(n).padStart(2, "0");
+    const ymd = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`, hm = `${p(d.getHours())}${p(d.getMinutes())}`;
+    return {
+      ymd, hm,
+      readable: `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`,
+      no: `CG-${ymd}-${hm}`,
+    };
+  }
+
+  // 填充打印专用页眉页脚（这些元素在屏幕上 display:none）。
+  // 挂在 beforeprint 上，因此「点导出按钮」和「直接 Cmd/Ctrl+P」两条路都能拿到完整页眉。
+  function fillPrintHeader() {
+    const ov = state.lastOverview;
+    if (!ov) return;
+    const stamp = reportStamp();
+    const ids = ov.ids || [...state.selected.overview];
+    const names = ids.map((id) => (state.contracts.find((c) => c.id === id) || {}).name || id);
+    const shown = names.slice(0, 3).join("、") + (names.length > 3 ? ` 等 ${names.length} 份` : "");
+    const o = ov.data.overall || {};
+    if ($("#ph-time")) $("#ph-time").textContent = `生成时间　${stamp.readable}`;
+    if ($("#ph-subjects")) $("#ph-subjects").textContent = `评估对象：${shown}`;
+    if ($("#ph-meta")) $("#ph-meta").textContent =
+      `报告编号：${stamp.no}　·　综合风险等级：${o.risk_level || "—"}${o.risk_score != null ? `（${o.risk_score}/100）` : ""}　·　性价比评分：${o.value_score != null ? `${o.value_score}/100` : "—"}`;
+    if ($("#ph-no-foot")) $("#ph-no-foot").textContent = `ContractGuard 综合评估报告 · ${stamp.no} · ${stamp.readable}`;
+  }
+
+  function printReport() {
+    if (!state.lastOverview) return toast("请先运行一次综合评估，再导出打印版", "err");
+    fillPrintHeader();
+    const stamp = reportStamp();
+
+    // 借 document.title 控制「另存为 PDF」的默认文件名；打印结束后还原
+    const prevTitle = document.title;
+    document.title = `ContractGuard综合评估报告_${stamp.ymd}_${stamp.hm}`;
+    let restored = false;
+    const restore = () => {
+      if (restored) return;
+      restored = true;
+      document.title = prevTitle;
+      window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
+    setTimeout(() => window.print(), 80);
+    setTimeout(restore, 120000); // 兜底：个别浏览器不派发 afterprint
+  }
+
+  /* C2：复制「打开即自动出报告」的链接。
+     127.0.0.1 属安全上下文可用 Clipboard API；通过局域网 http 访问时会降级为弹窗手动复制。 */
+  async function copyReportLink() {
+    const url = shareUrl("overview");
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("链接已复制：队友打开后会自动生成同一份报告", "ok");
+    } catch (e) {
+      window.prompt("复制下面的链接，发给队友可直接打开这份报告：", url);
+    }
   }
 
   async function runAgentTask() {
@@ -671,7 +943,7 @@
     busy(button, true, "Agent 处理中…"); loading(root, "正在判断合同类型、字段完整度与最合适的分析工具…");
     try {
       const data = await API.agentTask({ task, contract_ids: ids, financials: task.includes("财务") || task.includes("契约") ? readFinancials() : null });
-      root.innerHTML = renderAgentTask(data); state.aiContext = `任务：${task}\n工具：${data.tool_trace.map(x=>x.tool+':'+x.status).join('；')}`;
+      root.innerHTML = renderAgentTask(data); state.aiContext = data.ai_context || `任务：${task}\n工具：${data.tool_trace.map(x=>x.tool+':'+x.status).join('；')}`;
     } catch (e) { root.innerHTML = ""; toast(e.message, "err"); }
     finally { busy(button, false); }
   }
@@ -680,7 +952,11 @@
     const trace = data.tool_trace.map((x) => `<div class="agent-trace ${x.status}"><span>${x.status === 'called' ? '已调用' : x.status === 'available' ? '可用' : '已跳过'}</span><b>${esc(x.tool)}</b><p>${esc(x.reason)}</p><em>${x.result_type === 'ai_judgment' ? 'AI 判断' : '确定性代码'}</em></div>`).join("");
     const reviews = data.human_review || [];
     const resultKeys = Object.keys(data.results || {});
-    return `<section class="result-block"><div class="result-title">任务执行报告<span class="rt-tag">${esc(data.task)}</span></div><div class="agent-scope"><b>外部模型</b><span>${data.external_llm.used ? `已启用 · 范围：${esc(data.external_llm.scope)}` : '未调用'}</span><b>关键计算</b><span>全部由确定性代码完成</span></div><div class="agent-trace-list">${trace}</div><div class="summary-banner gold"><div class="sb-body"><b>执行结果</b><p>已生成 ${resultKeys.length} 类结果：${esc(resultKeys.join('、') || '无可执行结果')}。${reviews.length ? `有 ${reviews.length} 项进入人工复核。` : '当前无新增人工复核项。'}</p></div></div>${reviews.length ? `<div class="ov-section"><div class="ov-sec-title">人工复核问题</div><ul class="ov-review">${reviews.map((x)=>`<li>${esc(x.label)}：${esc(x.text)}</li>`).join('')}</ul></div>` : ''}<details class="agent-raw"><summary>查看结构化任务结果</summary><pre>${esc(JSON.stringify(data.results, null, 2))}</pre></details></section>`;
+    const findings = data.ai_summary || [];
+    const findingsBlock = findings.length
+      ? `<div class="ov-section"><div class="ov-sec-title">关键发现（${findings.length} 项）</div><ul class="ov-review">${findings.map((x) => `<li><b>${esc(x.title)}</b>（${esc(x.level || '未分级')}）<br>${esc(x.why || '')}<br>依据：${esc(x.evidence || '—')}${x.clause ? '（' + esc(x.clause) + '）' : ''}<br>建议：${esc(x.advice || '—')}</li>`).join('')}</ul></div>`
+      : "";
+    return `<section class="result-block"><div class="result-title">任务执行报告<span class="rt-tag">${esc(data.task)}</span></div><div class="agent-scope"><b>外部模型</b><span>${data.external_llm.used ? `已启用 · 范围：${esc(data.external_llm.scope)}` : '未调用'}</span><b>关键计算</b><span>全部由确定性代码完成</span></div><div class="agent-trace-list">${trace}</div>${findingsBlock}<div class="summary-banner gold"><div class="sb-body"><b>执行结果</b><p>已生成 ${resultKeys.length} 类结果：${esc(resultKeys.join('、') || '无可执行结果')}。${reviews.length ? `有 ${reviews.length} 项进入人工复核。` : '当前无新增人工复核项。'}</p></div></div>${reviews.length ? `<div class="ov-section"><div class="ov-sec-title">人工复核问题</div><ul class="ov-review">${reviews.map((x)=>`<li>${esc(x.label)}：${esc(x.text)}</li>`).join('')}</ul></div>` : ''}<details class="agent-raw"><summary>查看结构化任务结果</summary><pre>${esc(JSON.stringify(data.results, null, 2))}</pre></details></section>`;
   }
 
   async function persistRename(id, input, onDone) {
@@ -862,6 +1138,13 @@
     $("#btn-agent-run").onclick = runAgentTask; $("#task-templates").onclick = (e) => { const b=e.target.closest("[data-task]"); if(b) $("#agent-task-input").value=b.dataset.task; };
     $("#deterministic-only").onchange = async () => { await API.updateSecurity({deterministic_only:$("#deterministic-only").checked,external_scope:"masked_evidence_only"}); await refreshSecurity(); toast("数据处理策略已更新","ok"); };
     $("#btn-costlens-run").onclick = runCost; $("#btn-scenario-run").onclick = runScenario; $("#btn-covenant-run").onclick = runCovenant; $("#btn-diff-run").onclick = runDiff; $("#btn-overview-run").onclick = runOverview;
+    // 委托绑定：结果区每次重渲染都会重建按钮，绑在容器上才不会失效
+    $("#overview-results").onclick = (e) => {
+      if (e.target.closest("#btn-print-report")) printReport();
+      else if (e.target.closest("#btn-copy-link")) copyReportLink();
+    };
+    // 直接按 Cmd/Ctrl+P 时也补全报告页眉
+    window.addEventListener("beforeprint", fillPrintHeader);
     $("#scenario-tabs").onclick = (e) => { const b = e.target.closest("button[data-s]"); if (!b) return; state.scenario = b.dataset.s; $$("button", $("#scenario-tabs")).forEach((x) => x.classList.toggle("active", x === b)); $("#param-prepay").style.display = state.scenario === "prepay" ? "flex" : "none"; $("#param-rate").style.display = state.scenario === "rate_up" ? "flex" : "none"; $("#param-stress").style.display = ["stress", "overdue"].includes(state.scenario) ? "flex" : "none"; };
     [["#param-month", "#param-month-val", 0], ["#param-delta", "#param-delta-val", 1], ["#param-late", "#param-late-val", 0]].forEach(([a, b, d]) => $(a).oninput = () => $(b).textContent = Number($(a).value).toFixed(d));
     $("#btn-fin-import").onclick = () => $("#fin-file-input").click(); $("#fin-file-input").onchange = () => importFinancialFile($("#fin-file-input").files[0]);
@@ -885,7 +1168,39 @@
       const riskEvidence = e.target.closest(".risk-evidence"); if (riskEvidence) { e.stopPropagation(); bindEvidence(riskEvidence); return; }
       const edit=e.target.closest("[data-edit-field]"); if(edit){e.stopPropagation(); const f=state.currentDetail?.contract?.fields?.[edit.dataset.editField]; if(f) openFieldEditor(state.currentContract,f); return;}
       if(e.target.closest("[data-reparse]")){try{busy(e.target.closest("button"),true,"解析中…");await API._fetch(`/api/contracts/${state.currentContract}/reparse`,{method:"POST"});await showContract(state.currentContract);toast("已重新解析并保留用户修正","ok");}catch(err){toast(err.message,"err");}return;}
-      const rb=e.target.closest("[data-review-status]"); if(rb){const li=rb.closest("[data-review-id]");await API.updateReview(state.currentContract,li.dataset.reviewId,{status:rb.dataset.reviewStatus,note:""});li.classList.add("review-done");toast("复核状态已保存","ok");}
+      const rb = e.target.closest("[data-review-status]");
+      if (rb) {
+        e.stopPropagation();
+        const li = rb.closest("[data-review-id]");
+        const noteInput = li.querySelector(".rv-note-input");
+        rb.disabled = true; rb.classList.add("saving");
+        try {
+          await submitReview(li, rb.dataset.reviewStatus, noteInput ? noteInput.value.trim() : "");
+          toast(`复核状态已记录：${reviewLabel(rb.dataset.reviewStatus)}`, "ok");
+        } catch (err) {
+          toast(err.message || "复核状态保存失败", "err");
+        } finally {
+          rb.disabled = false; rb.classList.remove("saving");
+        }
+        return;
+      }
+    };
+    /* 复核备注：回车保存。尚未选状态时按「待处理」登记，保证备注也留痕 */
+    $("#contract-detail").onkeydown = async (e) => {
+      const inp = e.target.closest(".rv-note-input");
+      if (!inp || e.key !== "Enter" || e.isComposing) return;
+      e.preventDefault();
+      const li = inp.closest("[data-review-id]");
+      const status = li.dataset.reviewCurrent || "pending";
+      inp.disabled = true;
+      try {
+        await submitReview(li, status, inp.value.trim());
+        toast(`备注已保存（状态：${reviewLabel(status)}）`, "ok");
+      } catch (err) {
+        toast(err.message || "备注保存失败", "err");
+      } finally {
+        inp.disabled = false;
+      }
     };
     $("#field-edit-cancel").onclick=()=>$("#field-edit-modal").style.display="none"; $("#field-edit-save").onclick=saveFieldEdit;
     $("#field-resolution").onclick=(e)=>{const b=e.target.closest("[data-r]");if(b)$$("button",$("#field-resolution")).forEach(x=>x.classList.toggle("active",x===b));};
@@ -911,6 +1226,10 @@
     bind(); clearFinancials();
     try { await Promise.all([loadContracts(), refreshAIStatus(), refreshSecurity(), refreshRuntimeStatus()]); } catch (e) { toast(`初始化失败：${e.message}`, "err"); }
     $("#view-container").scrollTop = 0;
+    // C2：先按地址栏还原视图与勾选；没有 hash 时补写一个，保证地址栏随时可复制分享
+    if (!applyFromHash()) syncUrl(state.view, false);
+    window.addEventListener("hashchange", applyFromHash);
+    window.addEventListener("popstate", applyFromHash);
   }
   document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", init) : init();
 })();

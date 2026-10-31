@@ -1,0 +1,12 @@
+# 开发与测试依赖（CI 与本地跑测试用）
+#
+# 引用 requirements.lock 而非 requirements.txt：CI 与本地安装同一批精确版本，
+# 避免"本地 0.138 通过、CI 装成 0.162 挂掉"这类环境漂移。
+# 生产运行只需 requirements.txt。
+-r requirements.lock
+
+# 测试框架（CI 是干净环境，必须显式声明）
+pytest>=8
+
+# fastapi.testclient 依赖 httpx；test_regression_agent_routing.py 用它走真实 HTTP 路由
+httpx>=0.27

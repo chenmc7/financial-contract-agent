@@ -19,6 +19,7 @@ except ImportError:
     from engines import ai_client
 
 LLM_TIMEOUT = 25  # 秒
+LLM_DOC_LIMIT = 6000  # 补强时送入模型的正文上限（字符）；超出部分不参与抽取
 
 PROMPT_TMPL = """你是金融合同结构化解析引擎。下面是一份《{ctype}》的合同文本。请仅针对下列【未发现】的字段，从原文中抽取信息并以 JSON 数组返回，每个元素形如：
 {{"key": "<字段key>", "value": "<标准化值>", "display": "<给业务人员看的展示>", "quote": "<原文引用片段，必须逐字摘自合同，≤60字>"}}
@@ -138,7 +139,8 @@ def llm_enrich(fields, doc, contract_type_label):
         return 0, "no_gap"
     keys = "、".join("%s(%s)" % (f["key"], f["label"]) for f in missing)
     doc_text = mask_sensitive(doc.get("clean_text", ""))
-    prompt = PROMPT_TMPL.format(ctype=contract_type_label, missing=keys, doc=doc_text[:6000])
+    prompt = PROMPT_TMPL.format(ctype=contract_type_label, missing=keys,
+                                doc=doc_text[:LLM_DOC_LIMIT])
     messages = [{"role": "user", "content": prompt}]
     text, err = _collect_stream(messages)
     if err or not text:

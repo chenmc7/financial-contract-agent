@@ -20,11 +20,21 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('confirmed_by_user: "用户已确认"', javascript)
         self.assertNotIn('${esc(x.status)}</span></td>', javascript)
 
-    def test_costlens_omits_unchanged_charts(self):
+    def test_costlens_renders_every_cashflow_period(self):
+        """成本项无变化仍省略柱图；现金流改为逐期全量图，不再抽样 5 点。"""
         javascript = (ROOT / "static/js/app.js").read_text(encoding="utf-8")
+        charts = (ROOT / "static/js/charts.js").read_text(encoding="utf-8")
         self.assertIn("showCostChart", javascript)
-        self.assertIn("showFlowChart", javascript)
-        self.assertIn("各展示期还款金额一致，已省略无变化曲线。", javascript)
+        # 旧的按 arr.length/5 抽样逻辑必须彻底移除
+        self.assertNotIn("arr.length / 5", javascript)
+        self.assertNotIn("showFlowChart", javascript)
+        # 全量 cashflows 直接交给图表组件
+        self.assertIn("CGCharts.flow(cashflows", javascript)
+        self.assertIn("line, bars, flow", charts)
+        # 图表必须同时画出还款、本金、利息三条序列
+        self.assertIn('key: "total"', charts)
+        self.assertIn('key: "principal"', charts)
+        self.assertIn('key: "interest"', charts)
 
     def test_library_notices_keep_labels_readable(self):
         css = (ROOT / "static/css/style.css").read_text(encoding="utf-8")

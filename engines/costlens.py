@@ -263,21 +263,79 @@ def build_cashflows(principal, annual_rate, term_months, repayment):
     return flows
 
 
+IRR_MAX_ITERATIONS = 200      # 二分上限，保留原口径
+IRR_RATE_FLOOR = -0.99        # 每期利率下界
+IRR_RATE_CEILING = 10.0       # 每期利率上界
+IRR_NPV_TOLERANCE = 1e-7      # 残差可接受阈值
+IRR_BRACKET_TOLERANCE = 1e-14  # 区间宽度收敛阈值：1e-10 时千万级本金的 NPV 残差仍有约 0.04，会被误判为不收敛
+
+
+def _npv(flows, rate):
+    """逐期折现求和。
+
+    极端利率下折现因子上溢（高利率、长期数）或下溢（利率趋近 -100%）都会出现：
+    上溢等价于该期现值趋于 0，下溢等价于趋于无穷，两种极端都只保留方向信息，
+    避免 OverflowError / ZeroDivisionError 冒到接口层。
+    """
+    base = 1.0 + rate
+    total = 0.0
+    for i, cf in enumerate(flows):
+        if not cf:
+            continue
+        try:
+            factor = base ** (i + 1)
+        except OverflowError:
+            # 分母溢出为无穷，该期折现后趋于 0
+            continue
+        if factor <= 0:
+            return float("inf") if cf > 0 else float("-inf")
+        total += cf / factor
+    return total
+
+
 def irr(cashflows, annualize=True, periods_per_year=12):
-    """牛顿迭代求内部收益率（每期），再年化"""
-    def npv(rate):
-        return sum(cf / (1 + rate) ** (i + 1) for i, cf in enumerate(cashflows))
-    lo, hi = -0.99, 10.0
-    for _ in range(200):
+    """二分求每期内部收益率，再年化；无解返回 None（前端展示「—」）。
+
+    原实现在 200 次二分后直接返回区间中点，无论是否真的存在零点，于是
+    「费用/保证金接近或超过本金」（净流入 ≤ 0、现金流全同号）时会把区间上界
+    10.0 年化成 12000% 这种荒谬数值展示给用户。现在改为显式判定无解：
+
+    1. 现金流不足两期，或全部同号 → 不存在 IRR，返回 None；
+    2. 区间两端 NPV 同号 → 区间内无符号变化，二分必然收敛到边界假解，返回 None；
+    3. 200 次后仍不收敛（区间未收缩到容差内或残差过大）→ 返回 None。
+    """
+    flows = [float(cf or 0) for cf in (cashflows or [])]
+    if len(flows) < 2:
+        return None
+    if not (any(cf > 0 for cf in flows) and any(cf < 0 for cf in flows)):
+        return None
+
+    lo, hi = IRR_RATE_FLOOR, IRR_RATE_CEILING
+    npv_lo = _npv(flows, lo)
+    npv_hi = _npv(flows, hi)
+    if npv_lo == 0:
+        return lo * periods_per_year if annualize else lo
+    if npv_hi == 0:
+        return hi * periods_per_year if annualize else hi
+    if npv_lo * npv_hi > 0:
+        return None
+
+    mid = lo
+    for _ in range(IRR_MAX_ITERATIONS):
         mid = (lo + hi) / 2
-        v = npv(mid)
-        if abs(v) < 1e-7:
-            break
-        if npv(lo) * v <= 0:
+        v = _npv(flows, mid)
+        if abs(v) < IRR_NPV_TOLERANCE:
+            return mid * periods_per_year if annualize else mid
+        if npv_lo * v <= 0:
             hi = mid
         else:
-            lo = mid
-    return mid * periods_per_year if annualize else mid
+            lo, npv_lo = mid, v
+        if hi - lo < IRR_BRACKET_TOLERANCE:
+            break
+    # 收敛性检查：区间足够窄且残差可接受才算有解，否则一律判无解。
+    if hi - lo < IRR_BRACKET_TOLERANCE and abs(_npv(flows, mid)) < 1e-3:
+        return mid * periods_per_year if annualize else mid
+    return None
 
 
 def _deposit_amount(contract):
@@ -361,10 +419,16 @@ def analyze_cost(contract, extra=None):
     if deposit:
         cf[-1] += deposit  # 最后一期返还保证金
     real_annual = None
+    real_annual_note = None
     try:
         real_annual = irr(cf, annualize=True, periods_per_year=periods_per_year)
     except Exception:
         real_annual = None
+    if real_annual is None:
+        # 无解不是计算失败：净到手资金不足以覆盖还本付息时，现金流没有符号变化，
+        # 年化成本已超出可定义范围，如实标注而不是回落成区间边界假值。
+        real_annual_note = ("真实年化成本无解：费用与保证金接近或超过本金，"
+                            "净到手资金无法支撑还本付息现金流，需人工复核费用结构")
 
     nominal_total = p * r * (n / 12)
     cost_items = [{"name": "利息支出", "amount": round(total_interest, 2), "type": "interest",
@@ -409,6 +473,7 @@ def analyze_cost(contract, extra=None):
         "comprehensive_rate": round(comprehensive_rate, 4),
         "comprehensive_rate_pct": round(comprehensive_rate * 100, 2),
         "real_annual_cost_pct": round(real_annual * 100, 2) if real_annual is not None else None,
+        "real_annual_cost_note": real_annual_note,
         "rate_gap_pp": round(fee_uplift * 100, 2),
         "cost_items": cost_items,
         "inputs": _input_evidence(contract),

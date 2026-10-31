@@ -12,6 +12,7 @@ data/*.db-*
 data/*.bak*
 uploads/
 uploads-public/
+uploads-share/
 output/
 
 # 密钥与环境变量

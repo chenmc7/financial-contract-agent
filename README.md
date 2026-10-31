@@ -76,13 +76,17 @@ python server.py
 ./share.sh    # 本机服务 + 临时 Cloudflare 隧道（无需账号或域名）
 ```
 
-`share.sh` 的隧道地址每次启动都会变化，仅供组内测试；本机与公网实例共用同一份 `data/contractguard.db` 和 `uploads/`，**不要**把不宜公开的合同放进这份共享库。
+`share.sh` 的隧道地址每次启动都会变化，仅供组内测试。公网实例使用**独立**的 `data/share.db` 与 `uploads-share/`，启动时自动灌入内置合成样本；本地真实合同与人工修正不会出现在公网实例上。演示前若要让公网展示某份合同，需在公网那套库里单独准备。
 
 ## 测试
 
 ```bash
+pip install -r requirements-dev.txt   # 含测试依赖；生产运行只需 requirements.txt
 python -m pytest tests -q
 ```
+
+需要完全复现某个已通过的版本时，用 `pip install -r requirements.lock`（锁定顶层依赖的精确版本）。
+CI 在每次 push 与 PR 时自动执行同一套测试，见 `.github/workflows/tests.yml`。
 
 `tests/benchmark/synthetic_core_features/` 提供 A–E 五份合成合同、对应的 ground truth 与覆盖率矩阵，可用 `validate_samples.py` 校验样本自洽性。
 
