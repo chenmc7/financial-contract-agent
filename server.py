@@ -906,9 +906,13 @@ def _agent_plan(task, n_contracts, has_financials):
     """返回 (工具列表, 计划来源)。来源取值：llm / keyword / fallback。"""
     if SECURITY["deterministic_only"] or not ai_client.is_configured():
         return _agent_normalize(_agent_keywords(task), n_contracts, has_financials), "keyword"
-    tools = _agent_llm_tools(task, n_contracts, has_financials)
-    if tools:
-        return _agent_normalize(tools, n_contracts, has_financials), "llm"
+    raw = _agent_llm_tools(task, n_contracts, has_financials)
+    if raw:
+        plan = _agent_normalize(raw, n_contracts, has_financials)
+        if plan:
+            return plan, "llm"
+        # 模型给出的工具全被白名单或上下文约束剔除：视为无效计划，
+        # 回退关键词而不是标着 llm 却什么都不做
     return _agent_normalize(_agent_keywords(task), n_contracts, has_financials), "fallback"
 
 
