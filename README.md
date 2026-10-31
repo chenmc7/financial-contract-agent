@@ -81,8 +81,12 @@ python server.py
 ## 测试
 
 ```bash
+pip install -r requirements-dev.txt   # 含测试依赖；生产运行只需 requirements.txt
 python -m pytest tests -q
 ```
+
+需要完全复现某个已通过的版本时，用 `pip install -r requirements.lock`（锁定顶层依赖的精确版本）。
+CI 在每次 push 与 PR 时自动执行同一套测试，见 `.github/workflows/tests.yml`。
 
 `tests/benchmark/synthetic_core_features/` 提供 A–E 五份合成合同、对应的 ground truth 与覆盖率矩阵，可用 `validate_samples.py` 校验样本自洽性。
 

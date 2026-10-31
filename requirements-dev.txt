@@ -1,0 +1,6 @@
+# 开发与测试依赖（CI 与本地跑测试用）
+# 生产运行只需 requirements.txt
+-r requirements.txt
+
+# fastapi.testclient 依赖 httpx；test_regression_agent_routing.py 用它走真实 HTTP 路由
+httpx>=0.27
