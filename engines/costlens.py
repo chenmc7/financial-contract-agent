@@ -267,7 +267,7 @@ IRR_MAX_ITERATIONS = 200      # 二分上限，保留原口径
 IRR_RATE_FLOOR = -0.99        # 每期利率下界
 IRR_RATE_CEILING = 10.0       # 每期利率上界
 IRR_NPV_TOLERANCE = 1e-7      # 残差可接受阈值
-IRR_BRACKET_TOLERANCE = 1e-10  # 区间宽度收敛阈值
+IRR_BRACKET_TOLERANCE = 1e-14  # 区间宽度收敛阈值：1e-10 时千万级本金的 NPV 残差仍有约 0.04，会被误判为不收敛
 
 
 def _npv(flows, rate):
