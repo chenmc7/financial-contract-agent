@@ -459,11 +459,105 @@
     return `<div class="file-diagnostics"><b>文件解析状态</b><span class="badge badge-green">${esc(statusText)}</span><span>${esc(fmt)}</span><span>${esc(pos)}</span><span>OCR ${d.ocr_page_count || 0} 页</span><span>表格 ${d.table_count || 0}</span><span>低质量页 ${(d.low_quality_pages || []).length}</span><span>敏感信息命中 ${d.sensitive_matches || 0}</span>${warns}</div>`;
   }
 
+  /* ═══ 复核状态表：必须与后端 POST /api/contracts/{cid}/reviews/{item_id} 的 allowed 集合一致 ═══
+     backend: submitted_legal / confirmed / accepted_risk / pending / material_change / wording_only */
+  const REVIEW_STATES = [
+    { key: "pending", label: "待处理", tone: "na", hint: "已登记，尚未处理" },
+    { key: "confirmed", label: "已确认", tone: "ok", hint: "已核对原文，采信该结论" },
+    { key: "accepted_risk", label: "接受风险", tone: "warn", hint: "确认存在该风险，业务上决定接受" },
+    { key: "material_change", label: "实质变更", tone: "danger", hint: "条款构成实质性变更，需重新评估" },
+    { key: "wording_only", label: "仅措辞", tone: "muted", hint: "仅措辞调整，经济含义未变" },
+    { key: "submitted_legal", label: "提交法务", tone: "legal", hint: "转专业法律人员复核" },
+  ];
+  const REVIEW_LABEL = REVIEW_STATES.reduce((m, s) => (m[s.key] = s.label, m), {});
+  const REVIEW_TONE = REVIEW_STATES.reduce((m, s) => (m[s.key] = s.tone, m), {});
+  const reviewLabel = (k) => REVIEW_LABEL[k] || k || "";
+
+  /* 复核时间戳是 time.time() 秒值，转成本地可读时间 */
+  function fmtStamp(ts) {
+    if (!ts) return "";
+    const d = new Date(Number(ts) * 1000);
+    if (Number.isNaN(d.getTime())) return "";
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
   function reviewHtml(orch, reviewStatus = {}) {
     const items = (orch && orch.review) || [];
     if (!items.length) return '<div class="hint-text">本轮解析无待复核项：字段置信度、类型判定与冲突检查均达阈值。</div>';
     const TYPE_ICON = { uncertain_field: "◐", conflict_field: "⨯", low_type_confidence: "◇", legal_review: "⚖" };
-    return '<ul class="review-list">' + items.map((it, i) => `<li class="rv-${esc(it.type)}" data-review-id="${esc(it.source || (`review-${i}`))}"><span class="rv-ic">${TYPE_ICON[it.type] || "•"}</span><div><b>${esc(it.label)}</b><p>${esc(it.text)}</p><div class="review-actions"><button data-review-status="submitted_legal">已提交法务</button><button data-review-status="confirmed">已确认</button><button data-review-status="accepted_risk">接受风险</button></div></div></li>`).join("") + "</ul>";
+    const itemId = (it, i) => it.source || `review-${i}`;
+    const isHandled = (saved) => !!(saved && saved.status && saved.status !== "pending");
+    const doneCount = items.filter((it, i) => isHandled(reviewStatus[itemId(it, i)])).length;
+    const pctDone = items.length ? Math.round((doneCount / items.length) * 100) : 0;
+    const progress = `<div class="rv-progress"><span class="rvp-label">复核进度</span><b>${doneCount}</b><span class="rvp-sep">/</span><span>${items.length} 项</span><div class="rvp-bar"><i style="width:${pctDone}%"></i></div><span class="rvp-pct">${pctDone}%</span></div>`;
+
+    const rows = items.map((it, i) => {
+      const id = itemId(it, i);
+      const saved = reviewStatus[id] || {};
+      const buttons = REVIEW_STATES.map((s) => {
+        const on = saved.status === s.key;
+        return `<button type="button" data-review-status="${s.key}" title="${esc(s.hint)}"${on ? ` class="active tone-${s.tone}" aria-pressed="true"` : ""}>${esc(s.label)}</button>`;
+      }).join("");
+      const badge = saved.status
+        ? `<div class="rv-meta"><span class="rv-badge tone-${REVIEW_TONE[saved.status] || "na"}">${esc(reviewLabel(saved.status))}</span>`
+          + (saved.updated_at ? `<time class="rv-time">${esc(fmtStamp(saved.updated_at))}</time>` : "")
+          + (saved.note ? `<span class="rv-note-text" title="${esc(saved.note)}">备注：${esc(saved.note)}</span>` : "")
+          + `</div>`
+        : `<div class="rv-meta"><span class="rv-badge tone-na">未复核</span></div>`;
+      return `<li class="rv-${esc(it.type)}" data-review-id="${esc(id)}" data-review-current="${esc(saved.status || "")}">`
+        + `<span class="rv-ic">${TYPE_ICON[it.type] || "•"}</span>`
+        + `<div class="rv-body"><b>${esc(it.label)}</b><p>${esc(it.text)}</p>${badge}`
+        + `<div class="review-actions">${buttons}</div>`
+        + `<div class="rv-notebox"><input type="text" class="rv-note-input" maxlength="200" value="${esc(saved.note || "")}" placeholder="复核备注（选填，回车保存）" aria-label="复核备注"></div>`
+        + `</div></li>`;
+    }).join("");
+    return progress + '<ul class="review-list">' + rows + "</ul>";
+  }
+
+  /* 把复核状态写回 DOM：页面加载回显与保存后即时刷新共用，保证两条路径表现一致 */
+  function applyReviewState(li, saved) {
+    if (!li) return;
+    const status = (saved && saved.status) || "";
+    const note = (saved && saved.note) || "";
+    li.dataset.reviewCurrent = status;
+    li.classList.toggle("review-done", !!status && status !== "pending");
+    const meta = li.querySelector(".rv-meta");
+    if (meta) {
+      meta.innerHTML = status
+        ? `<span class="rv-badge tone-${REVIEW_TONE[status] || "na"}">${esc(reviewLabel(status))}</span>`
+          + (saved.updated_at ? `<time class="rv-time">${esc(fmtStamp(saved.updated_at))}</time>` : "")
+          + (note ? `<span class="rv-note-text" title="${esc(note)}">备注：${esc(note)}</span>` : "")
+        : `<span class="rv-badge tone-na">未复核</span>`;
+    }
+    li.querySelectorAll("[data-review-status]").forEach((b) => {
+      const on = b.dataset.reviewStatus === status;
+      b.classList.toggle("active", on);
+      if (on) b.setAttribute("aria-pressed", "true"); else b.removeAttribute("aria-pressed");
+    });
+  }
+
+  /* 复核进度条随状态变化重算 */
+  function refreshReviewProgress() {
+    const box = $("#contract-detail .rv-progress");
+    const lis = $$("#contract-detail .review-list li");
+    if (!box || !lis.length) return;
+    const done = lis.filter((li) => li.dataset.reviewCurrent && li.dataset.reviewCurrent !== "pending").length;
+    const pct = Math.round((done / lis.length) * 100);
+    const num = box.querySelector("b"); if (num) num.textContent = done;
+    const bar = box.querySelector(".rvp-bar i"); if (bar) bar.style.width = pct + "%";
+    const label = box.querySelector(".rvp-pct"); if (label) label.textContent = pct + "%";
+  }
+
+  /* 提交复核状态：后端持久化 → 回写 DOM → 同步内存里的详情，切换视图回来也不会丢 */
+  async function submitReview(li, status, note) {
+    if (!li || !status) return null;
+    await API.updateReview(state.currentContract, li.dataset.reviewId, { status, note: note || "" });
+    const saved = { status, note: note || "", updated_at: Date.now() / 1000 };
+    applyReviewState(li, saved);
+    refreshReviewProgress();
+    if (state.currentDetail && state.currentDetail.review_status) state.currentDetail.review_status[li.dataset.reviewId] = saved;
+    return saved;
   }
 
   async function showContract(id) {
@@ -537,8 +631,9 @@
       if (txSelect) txSelect.onchange = () => { state.transactionSelections[id] = txSelect.value; const tx = transactions.find((t) => t.transaction_id === txSelect.value); const detail = document.getElementById("transaction-detail"); if (detail) detail.innerHTML = transactionDetailHtml(tx); toast("已切换交易；成本测算将只使用当前交易字段", "info"); };
       Object.entries(data.review_status || {}).forEach(([id, saved]) => {
         const row = $$("[data-review-id]", $("#contract-detail")).find((x) => x.dataset.reviewId === id);
-        if (row && saved.status) { row.classList.add("review-done"); const note = document.createElement("small"); note.className = "review-saved"; note.textContent = `已保存：${saved.status}`; row.querySelector("div > div")?.appendChild(note); }
+        if (row && saved && saved.status) applyReviewState(row, saved);
       });
+      refreshReviewProgress();
       $("#contract-detail").scrollIntoView({ behavior: "smooth", block: "start" });
       $$("#contract-detail .frow[data-clause]").forEach((row) => row.addEventListener("click", () => bindEvidence(row)));
     } catch (e) { toast(e.message, "err"); }
@@ -1071,7 +1166,39 @@
       const riskEvidence = e.target.closest(".risk-evidence"); if (riskEvidence) { e.stopPropagation(); bindEvidence(riskEvidence); return; }
       const edit=e.target.closest("[data-edit-field]"); if(edit){e.stopPropagation(); const f=state.currentDetail?.contract?.fields?.[edit.dataset.editField]; if(f) openFieldEditor(state.currentContract,f); return;}
       if(e.target.closest("[data-reparse]")){try{busy(e.target.closest("button"),true,"解析中…");await API._fetch(`/api/contracts/${state.currentContract}/reparse`,{method:"POST"});await showContract(state.currentContract);toast("已重新解析并保留用户修正","ok");}catch(err){toast(err.message,"err");}return;}
-      const rb=e.target.closest("[data-review-status]"); if(rb){const li=rb.closest("[data-review-id]");await API.updateReview(state.currentContract,li.dataset.reviewId,{status:rb.dataset.reviewStatus,note:""});li.classList.add("review-done");toast("复核状态已保存","ok");}
+      const rb = e.target.closest("[data-review-status]");
+      if (rb) {
+        e.stopPropagation();
+        const li = rb.closest("[data-review-id]");
+        const noteInput = li.querySelector(".rv-note-input");
+        rb.disabled = true; rb.classList.add("saving");
+        try {
+          await submitReview(li, rb.dataset.reviewStatus, noteInput ? noteInput.value.trim() : "");
+          toast(`复核状态已记录：${reviewLabel(rb.dataset.reviewStatus)}`, "ok");
+        } catch (err) {
+          toast(err.message || "复核状态保存失败", "err");
+        } finally {
+          rb.disabled = false; rb.classList.remove("saving");
+        }
+        return;
+      }
+    };
+    /* 复核备注：回车保存。尚未选状态时按「待处理」登记，保证备注也留痕 */
+    $("#contract-detail").onkeydown = async (e) => {
+      const inp = e.target.closest(".rv-note-input");
+      if (!inp || e.key !== "Enter" || e.isComposing) return;
+      e.preventDefault();
+      const li = inp.closest("[data-review-id]");
+      const status = li.dataset.reviewCurrent || "pending";
+      inp.disabled = true;
+      try {
+        await submitReview(li, status, inp.value.trim());
+        toast(`备注已保存（状态：${reviewLabel(status)}）`, "ok");
+      } catch (err) {
+        toast(err.message || "备注保存失败", "err");
+      } finally {
+        inp.disabled = false;
+      }
     };
     $("#field-edit-cancel").onclick=()=>$("#field-edit-modal").style.display="none"; $("#field-edit-save").onclick=saveFieldEdit;
     $("#field-resolution").onclick=(e)=>{const b=e.target.closest("[data-r]");if(b)$$("button",$("#field-resolution")).forEach(x=>x.classList.toggle("active",x===b));};
