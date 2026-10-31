@@ -116,7 +116,6 @@ def load_config(path="config.json"):
         _migrate_legacy_key(path, legacy_key)
         save_config(path)
     for env_name, config_name in (
-        ("CONTRACTGUARD_PROVIDER", "provider"),
         ("CONTRACTGUARD_MODEL", "model"),
         ("CONTRACTGUARD_BASE_URL", "base_url"),
         ("CONTRACTGUARD_PROXY", "proxy"),
@@ -124,6 +123,19 @@ def load_config(path="config.json"):
         value = (os.getenv(env_name) or "").strip()
         if value:
             CONFIG[config_name] = value
+    # provider 单独处理：只设了 CONTRACTGUARD_PROVIDER 时，base_url 与 model 仍是
+    # config.json 里的旧值，会出现「provider=deepseek 却请求 OpenAI 地址」的错配，
+    # 必然调用失败且报错难懂。这里按预设补齐未被显式覆盖的字段；
+    # 显式设了 CONTRACTGUARD_BASE_URL / MODEL 的以显式值为准，不冲掉自定义网关。
+    # 未知 provider 直接忽略，保持配置文件里的值，避免请求打到错误地址。
+    provider_env = (os.getenv("CONTRACTGUARD_PROVIDER") or "").strip()
+    preset = PROVIDER_PRESETS.get(provider_env)
+    if preset:
+        CONFIG["provider"] = provider_env
+        if not (os.getenv("CONTRACTGUARD_BASE_URL") or "").strip():
+            CONFIG["base_url"] = preset["base_url"]
+        if not (os.getenv("CONTRACTGUARD_MODEL") or "").strip():
+            CONFIG["model"] = preset["model"]
     return CONFIG
 
 
