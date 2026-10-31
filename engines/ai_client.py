@@ -6,6 +6,7 @@
 import json
 import os
 import time
+import threading
 import urllib.request
 import urllib.error
 import socket
@@ -221,8 +222,17 @@ def _is_conn_error(exc):
     return not isinstance(exc, urllib.error.HTTPError)
 
 
-def _stream_chat(messages, max_tokens=2048, temperature=0.3):
-    """调用 OpenAI 兼容 /chat/completions，流式 yield 文本增量"""
+def _stream_chat(messages, max_tokens=2048, temperature=0.3, timeout=None, retries=None,
+                 allow_probe=True):
+    """调用 OpenAI 兼容 /chat/completions，流式 yield 文本增量。
+
+    timeout 为空时用 CONFIG["timeout"]。意图分类这类短任务必须传入更短的值：
+    否则外层线程已按短超时返回，底层 socket 仍会挂满整个长超时周期。
+    retries 为空时用 CONFIG["retries"]；短任务应传 0——分类失败直接降级更快。
+    allow_probe 为 False 时跳过本机代理探测（探测会串行尝试 8 个端口，短任务等不起）。
+    """
+    read_timeout = timeout or CONFIG.get("timeout", 25)
+    max_retries = int(CONFIG.get("retries", 2)) if retries is None else int(retries)
     url = CONFIG["base_url"].rstrip("/") + "/chat/completions"
     payload = {
         "model": CONFIG["model"],
@@ -243,23 +253,23 @@ def _stream_chat(messages, max_tokens=2048, temperature=0.3):
     resp = None
     last_error = None
     probed = False
-    for attempt in range(int(CONFIG.get("retries", 2)) + 1):
+    for attempt in range(max_retries + 1):
         try:
-            resp = _build_opener().open(req, timeout=CONFIG.get("timeout", 25))
+            resp = _build_opener().open(req, timeout=read_timeout)
             break
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, socket.timeout) as exc:
             last_error = exc
             # 连接失败且未配置代理时，自动探测常见本机代理（一次性）
-            if not probed and _is_conn_error(exc) and not (CONFIG.get("proxy") or "").strip():
+            if allow_probe and not probed and _is_conn_error(exc) and not (CONFIG.get("proxy") or "").strip():
                 probed = True
                 p = _probe_proxy()
                 if p:
                     try:
-                        resp = _build_opener().open(req, timeout=CONFIG.get("timeout", 25))
+                        resp = _build_opener().open(req, timeout=read_timeout)
                         break
                     except Exception:
                         pass
-            if attempt >= int(CONFIG.get("retries", 2)):
+            if attempt >= max_retries:
                 raise
             time.sleep(0.35 * (attempt + 1))
     if resp is None:
@@ -287,6 +297,32 @@ def _stream_chat(messages, max_tokens=2048, temperature=0.3):
                         yield content
                 except json.JSONDecodeError:
                     continue
+
+
+def complete(messages, max_tokens=256, temperature=0.0, timeout=8):
+    """非流式取回完整回复，用于意图分类这类短输出场景。
+
+    带线程级超时：超时、连接失败、HTTP 错误一律返回 None，
+    由调用方决定是否降级，不向上抛异常（分类失败不应影响主流程）。
+    """
+    buf, errors = [], []
+
+    def run():
+        try:
+            for chunk in _stream_chat(messages, max_tokens=max_tokens,
+                                       temperature=temperature, timeout=timeout,
+                                       retries=0, allow_probe=False):
+                if chunk:
+                    buf.append(chunk)
+        except Exception as exc:
+            errors.append(str(exc))
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(timeout + 0.5)
+    if worker.is_alive() or errors:
+        return None
+    return "".join(buf) or None
 
 
 def chat_stream(messages, context=None):
