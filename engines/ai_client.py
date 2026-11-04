@@ -6,6 +6,7 @@
 import json
 import os
 import time
+import threading
 import urllib.request
 import urllib.error
 import socket
@@ -28,12 +29,30 @@ COMMON_PROXIES = [
 ]
 
 PROVIDER_PRESETS = {
-    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat", "label": "DeepSeek"},
-    "zhipu": {"base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-flash", "label": "智谱GLM"},
-    "qwen": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus", "label": "通义千问"},
-    "moonshot": {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k", "label": "Kimi"},
-    "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini", "label": "OpenAI"},
+    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat",
+                 "label": "DeepSeek", "help_url": "https://platform.deepseek.com/"},
+    "zhipu": {"base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-flash",
+              "label": "智谱GLM", "help_url": "https://open.bigmodel.cn/"},
+    "qwen": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus",
+             "label": "通义千问", "help_url": "https://dashscope.console.aliyun.com/"},
+    "moonshot": {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k",
+                 "label": "Kimi", "help_url": "https://platform.moonshot.cn/"},
+    "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini",
+               "label": "OpenAI", "help_url": "https://platform.openai.com/"},
 }
+
+
+def _quota_hint():
+    """按当前供应商返回充值提示，不含前后缀，由调用处决定包装方式。
+
+    地址统一用平台首页而非充值深链接：首页地址稳定，深链接易随版本改版失效。
+    """
+    preset = PROVIDER_PRESETS.get(CONFIG.get("provider"), {})
+    label = preset.get("label") or CONFIG.get("provider") or "服务商"
+    url = preset.get("help_url") or ""
+    if url:
+        return "%s 配额不足，请到 %s 充值后再试" % (label, url)
+    return "%s 配额不足，请到服务商控制台充值后再试" % label
 
 SYSTEM_PROMPT = """你是 ContractGuard 的内嵌AI风控专家，专注于金融合同全生命周期风险管理。
 你的职责：
@@ -97,7 +116,6 @@ def load_config(path="config.json"):
         _migrate_legacy_key(path, legacy_key)
         save_config(path)
     for env_name, config_name in (
-        ("CONTRACTGUARD_PROVIDER", "provider"),
         ("CONTRACTGUARD_MODEL", "model"),
         ("CONTRACTGUARD_BASE_URL", "base_url"),
         ("CONTRACTGUARD_PROXY", "proxy"),
@@ -105,6 +123,19 @@ def load_config(path="config.json"):
         value = (os.getenv(env_name) or "").strip()
         if value:
             CONFIG[config_name] = value
+    # provider 单独处理：只设了 CONTRACTGUARD_PROVIDER 时，base_url 与 model 仍是
+    # config.json 里的旧值，会出现「provider=deepseek 却请求 OpenAI 地址」的错配，
+    # 必然调用失败且报错难懂。这里按预设补齐未被显式覆盖的字段；
+    # 显式设了 CONTRACTGUARD_BASE_URL / MODEL 的以显式值为准，不冲掉自定义网关。
+    # 未知 provider 直接忽略，保持配置文件里的值，避免请求打到错误地址。
+    provider_env = (os.getenv("CONTRACTGUARD_PROVIDER") or "").strip()
+    preset = PROVIDER_PRESETS.get(provider_env)
+    if preset:
+        CONFIG["provider"] = provider_env
+        if not (os.getenv("CONTRACTGUARD_BASE_URL") or "").strip():
+            CONFIG["base_url"] = preset["base_url"]
+        if not (os.getenv("CONTRACTGUARD_MODEL") or "").strip():
+            CONFIG["model"] = preset["model"]
     return CONFIG
 
 
@@ -174,7 +205,7 @@ def test_connection():
         detail = _http_error_detail(e)
         hint = ""
         if "insufficient_quota" in detail or "quota" in detail.lower():
-            hint = " —— API Key 配额不足，请到 platform.openai.com 的 Billing 页面充值后再试"
+            hint = " —— " + _quota_hint()
         elif "invalid_api_key" in detail.lower():
             hint = " —— API Key 无效，请检查是否复制完整"
         return {"ok": False, "message": "连接失败：%s%s" % (detail[:200], hint)}
@@ -221,8 +252,17 @@ def _is_conn_error(exc):
     return not isinstance(exc, urllib.error.HTTPError)
 
 
-def _stream_chat(messages, max_tokens=2048, temperature=0.3):
-    """调用 OpenAI 兼容 /chat/completions，流式 yield 文本增量"""
+def _stream_chat(messages, max_tokens=2048, temperature=0.3, timeout=None, retries=None,
+                 allow_probe=True):
+    """调用 OpenAI 兼容 /chat/completions，流式 yield 文本增量。
+
+    timeout 为空时用 CONFIG["timeout"]。意图分类这类短任务必须传入更短的值：
+    否则外层线程已按短超时返回，底层 socket 仍会挂满整个长超时周期。
+    retries 为空时用 CONFIG["retries"]；短任务应传 0——分类失败直接降级更快。
+    allow_probe 为 False 时跳过本机代理探测（探测会串行尝试 8 个端口，短任务等不起）。
+    """
+    read_timeout = timeout or CONFIG.get("timeout", 25)
+    max_retries = int(CONFIG.get("retries", 2)) if retries is None else int(retries)
     url = CONFIG["base_url"].rstrip("/") + "/chat/completions"
     payload = {
         "model": CONFIG["model"],
@@ -243,23 +283,23 @@ def _stream_chat(messages, max_tokens=2048, temperature=0.3):
     resp = None
     last_error = None
     probed = False
-    for attempt in range(int(CONFIG.get("retries", 2)) + 1):
+    for attempt in range(max_retries + 1):
         try:
-            resp = _build_opener().open(req, timeout=CONFIG.get("timeout", 25))
+            resp = _build_opener().open(req, timeout=read_timeout)
             break
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, socket.timeout) as exc:
             last_error = exc
             # 连接失败且未配置代理时，自动探测常见本机代理（一次性）
-            if not probed and _is_conn_error(exc) and not (CONFIG.get("proxy") or "").strip():
+            if allow_probe and not probed and _is_conn_error(exc) and not (CONFIG.get("proxy") or "").strip():
                 probed = True
                 p = _probe_proxy()
                 if p:
                     try:
-                        resp = _build_opener().open(req, timeout=CONFIG.get("timeout", 25))
+                        resp = _build_opener().open(req, timeout=read_timeout)
                         break
                     except Exception:
                         pass
-            if attempt >= int(CONFIG.get("retries", 2)):
+            if attempt >= max_retries:
                 raise
             time.sleep(0.35 * (attempt + 1))
     if resp is None:
@@ -289,6 +329,32 @@ def _stream_chat(messages, max_tokens=2048, temperature=0.3):
                     continue
 
 
+def complete(messages, max_tokens=256, temperature=0.0, timeout=8):
+    """非流式取回完整回复，用于意图分类这类短输出场景。
+
+    带线程级超时：超时、连接失败、HTTP 错误一律返回 None，
+    由调用方决定是否降级，不向上抛异常（分类失败不应影响主流程）。
+    """
+    buf, errors = [], []
+
+    def run():
+        try:
+            for chunk in _stream_chat(messages, max_tokens=max_tokens,
+                                       temperature=temperature, timeout=timeout,
+                                       retries=0, allow_probe=False):
+                if chunk:
+                    buf.append(chunk)
+        except Exception as exc:
+            errors.append(str(exc))
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(timeout + 0.5)
+    if worker.is_alive() or errors:
+        return None
+    return "".join(buf) or None
+
+
 def chat_stream(messages, context=None):
     """统一入口：配置了 Key → 真实流式调用；未配置 → 内置智能引擎流式输出"""
     if is_configured():
@@ -309,7 +375,7 @@ def chat_stream(messages, context=None):
                 if isinstance(exc, urllib.error.HTTPError):
                     detail = _http_error_detail(exc)
                     if "quota" in detail.lower():
-                        hint = "（原因：API Key 配额不足，请到 platform.openai.com 的 Billing 页面充值）"
+                        hint = "（原因：" + _quota_hint() + "）"
                 yield "实时 AI 服务暂时无法连接%s，已自动切换为内置智能引擎。\n\n" % hint
                 yield from _builtin_engine_stream(messages, context)
     else:
@@ -333,11 +399,25 @@ def _builtin_engine_stream(messages, context):
         time.sleep(0.012)
 
 
+# 与 server.RISK_CONTEXT_MARK 保持一致：用于识别"这段上下文是风险审查结果"
+RISK_CONTEXT_MARK = "【风险审查】"
+
+
 def _builtin_answer(question, context):
     if not context:
+        preset = PROVIDER_PRESETS.get(CONFIG.get("provider"), {})
+        label = preset.get("label") or "大模型"
         return ("AI实时接口尚未配置，当前为内置智能引擎模式。\n\n"
-                "我可以在接入 OpenAI GPT / DeepSeek 等大模型API后提供实时智能问答。\n\n"
-                "请在后端 .env 中配置 CONTRACTGUARD_API_KEY，重启后即可启用实时调用。")
+                "我可以在接入 %s 等大模型 API 后提供实时智能问答。\n\n"
+                "请在后端 .env 中配置 CONTRACTGUARD_API_KEY，重启后即可启用实时调用。" % label)
+    text = context.strip()
+    # 风险段来自 /api/agent/tasks（见 server._build_ai_context），
+    # 已是"风险 / 原因 / 依据 / 建议"四要素，直接呈现，不再逐行复述数字摘要
+    if text.startswith(RISK_CONTEXT_MARK):
+        return ("【内置智能引擎 · 风险要点】\n\n" + text[len(RISK_CONTEXT_MARK):].strip() +
+                "\n\n以上条目按风险等级排序，依据均为合同原文摘录；"
+                "涉及重大决策建议咨询专业律师。\n"
+                "如需更完整的自然语言解读，可在后端配置 API Key 后启用实时模型。")
     head = "【内置智能引擎 · 基于当前分析结果】\n\n"
     # 提取上下文中的关键数字形成结构化回答
     lines = [head, "根据当前合同分析结果，为你梳理关键结论：\n"]

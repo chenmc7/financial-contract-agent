@@ -95,7 +95,11 @@ def analyze_bundle(records, financials=None, prepay_month=12):
                     "summary": covenant.summary(monitored),
                 })
 
-    avg_rate = sum(x["result"].get("real_annual_cost_pct", 0) for x in valid_costs) / max(1, len(valid_costs))
+    # IRR 无解时 real_annual_cost_pct 为 None（见 costlens.irr），必须先剔除再求均值，
+    # 否则 sum() 会因 int + None 抛 TypeError，导致整个综合评估接口 500。
+    _rates = [x["result"]["real_annual_cost_pct"] for x in valid_costs
+              if x["result"].get("real_annual_cost_pct") is not None]
+    avg_rate = sum(_rates) / max(1, len(_rates))
     triggered = sum(x["summary"].get("triggered", 0) for x in covenant_results)
     near = sum(x["summary"].get("near", 0) for x in covenant_results)
     diff_up = diff_result.get("up_count", 0)

@@ -1,0 +1,428 @@
+/* ══════════════════════════════════════════════════════════════
+   ContractGuard · 报告导出样式（C1）
+   ──────────────────────────────────────────────────────────────
+   本文件分两部分，职责清晰，互不干扰：
+
+   ① 屏幕端（不加 @media 包裹，仅 2 条规则）
+      · .print-only     → 打印专用元素在屏幕上永久隐藏
+      · .report-toolbar → 「导出打印版」工具栏（只在综合评估页出现）
+
+   ② 打印端（全部包裹在 @media print 内）
+      · 白底黑字：重定义设计系统变量，深色终端色板整体翻转为纸张色板
+      · 解除布局限制：body/#app/#view-container 原本是 100vh + overflow:hidden，
+        打印时若不解除，只会输出"当前滚动到的那一屏"
+      · 隐藏界面外壳：侧边栏、顶栏、按钮、选择器都不进纸面
+      · 分页控制：表格行不腰斩、标题不孤悬、板块不被切断
+
+   设计约束：
+   · 屏幕端视觉零变化（除新增的导出按钮）
+   · 语义色（红=风险 / 绿=安全 / 黄=接近阈值）保留，但换成打印安全的深色值，
+     保证黑白打印机上仍能靠明度区分
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─────────── ① 屏幕端 ─────────── */
+
+/* 打印专用元素：屏幕上永不出现 */
+.print-only { display: none !important; }
+
+/* 报告工具栏（综合评估结果上方） */
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  background: rgba(79, 124, 255, 0.06);
+  border: 1px solid rgba(79, 124, 255, 0.22);
+  border-radius: var(--radius-sm);
+}
+.report-toolbar .rt-note { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.report-toolbar .rt-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.report-toolbar .rt-note b { font-size: 13px; color: var(--text); }
+.report-toolbar .rt-note span { font-size: 11.5px; color: var(--text-3); }
+.report-toolbar #btn-print-report {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-color: rgba(79, 124, 255, 0.4);
+  color: #8FB0FF;
+  white-space: nowrap;
+}
+.report-toolbar #btn-print-report:hover { border-color: var(--blue); color: var(--text); background: rgba(79, 124, 255, 0.12); }
+.report-toolbar #btn-print-report svg { width: 14px; height: 14px; }
+
+/* ─────────── ② 打印端 ─────────── */
+
+/* A4 纵向，四周留白 14~16mm（打印机不可打印区域之外） */
+@page {
+  size: A4 portrait;
+  margin: 15mm 13mm 14mm;
+}
+
+@media print {
+
+  /* ═══ 0. 打印快照不等待动画 ═══
+     页面里不少板块带 riseIn 入场动画（0.4s，from opacity:0）。
+     打印快照可能采样在动画尚未完成的那一帧，表现为「元素占了位置却不显示」——
+     综合评估的结论横幅就会整块消失。这里统一掐掉动画与过渡。 */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* ═══ 1. 页面与色彩基础 ═══ */
+  html,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #FFFFFF !important;
+    color: #111827 !important;
+    font-size: 10.5pt;
+    line-height: 1.62;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 深色终端色板 → 纸张色板（设计系统全部走变量，改这一处即可整体翻转） */
+  :root {
+    --bg: #FFFFFF;
+    --bg-2: #F7F9FC;
+    --surface: #FFFFFF;
+    --surface-2: #F7F9FC;
+    --surface-3: #EEF2F8;
+    --border: #D9E0EA;
+    --border-2: #C3CDDB;
+    --text: #111827;
+    --text-2: #374151;
+    --text-3: #6B7280;
+    --blue: #1D4ED8;
+    --cyan: #0369A1;
+    --gold: #92600C;
+    --violet: #6D28D9;
+    --green: #067647;
+    --amber: #B54708;
+    --red: #B42318;
+    --grad: linear-gradient(135deg, #1D4ED8 0%, #0369A1 100%);
+    --shadow: none;
+  }
+
+  /* ═══ 2. 解除屏幕端固定高度 / 内部滚动 ═══ */
+  #app {
+    display: block !important;
+    height: auto !important;
+    opacity: 1 !important;
+    transition: none !important;
+  }
+  #main {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  #view-container {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    max-width: none !important;
+    scroll-behavior: auto !important;
+  }
+  .view {
+    display: none !important;
+    max-width: none !important;
+    margin: 0 !important;
+    animation: none !important;
+  }
+  .view.active { display: block !important; }
+
+  /* ═══ 3. 界面外壳不进纸面 ═══ */
+  #sidebar,
+  #topbar,
+  #intro,
+  #ai-fab,
+  #ai-panel,
+  #toast-wrap,
+  #demo-warning,
+  .demo-overlay,
+  .modal-mask,
+  .report-toolbar,
+  .analyze-bar,
+  .contract-picker,
+  .view-head,
+  .panel,
+  .upload-zone,
+  .source-notice,
+  .processing-notice,
+  .security-strip,
+  .task-templates,
+  .diff-selectors,
+  .scenario-controls,
+  .param-row,
+  .fin-editor,
+  .hero-actions,
+  .agent-raw,
+  .loading-block,
+  .hint-text,
+  .test-result,
+  #btn-replay-intro,
+  .service-health {
+    display: none !important;
+  }
+
+  /* ═══ 4. 报告主体 ═══ */
+  .result-block {
+    background: #FFFFFF !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 0 9mm !important;
+    box-shadow: none !important;
+    animation: none !important;
+  }
+  .result-title {
+    font-size: 13pt;
+    font-weight: 800;
+    color: #0F172A !important;
+    padding-bottom: 2.4mm;
+    margin-bottom: 4mm;
+    border-bottom: 1.2pt solid #1D4ED8;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .result-title .rt-tag {
+    background: #EEF3FF !important;
+    color: #1D4ED8 !important;
+    border: 0.4pt solid #C7D6F5;
+    font-size: 8pt;
+  }
+
+  /* 综合评估：页眉已有主标题，正文里这块标题重复，打印时省掉 */
+  #overview-results .result-block > .result-title { display: none !important; }
+
+  /* —— 评级卡 —— */
+  .overview-top {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 4mm;
+    margin-bottom: 5mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .ov-grade {
+    background: #F7F9FC !important;
+    border: 0.4pt solid #D9E0EA !important;
+    border-radius: 2mm;
+    padding: 4mm;
+    text-align: center;
+  }
+  .ov-grade .ov-label { color: #6B7280 !important; font-size: 9pt; }
+  .ov-grade .ov-value { font-size: 26pt; }
+  .ov-grade .ov-value.good { color: #067647 !important; }
+  .ov-grade .ov-value.warn { color: #92600C !important; }
+  .ov-grade .ov-value.danger { color: #B42318 !important; }
+  .ov-grade .ov-sub { color: #6B7280 !important; font-size: 8.5pt; }
+
+  /* —— 结论横幅 —— */
+  .summary-banner {
+    background: #F5F8FF !important;
+    border: 0.4pt solid #C7D6F5 !important;
+    border-radius: 2mm;
+    padding: 4mm 5mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .summary-banner.red { background: #FEF4F3 !important; border-color: #EFA7A0 !important; }
+  .summary-banner.gold { background: #FFFAEB !important; border-color: #E4B34A !important; }
+  .summary-banner.green { background: #F4FBF7 !important; border-color: #8ACFA9 !important; }
+  .summary-banner .sb-body b { color: #0F172A !important; }
+  .summary-banner .sb-body p { color: #374151 !important; }
+
+  /* —— 板块与分页 —— */
+  .ov-section {
+    margin-top: 5mm;
+    padding-top: 4mm;
+    border-top: 0.4pt solid #D9E0EA;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .ov-sec-title {
+    font-size: 11.5pt;
+    font-weight: 800;
+    color: #0F172A !important;
+    margin-bottom: 3mm;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* —— 数据表 —— */
+  .data-table {
+    width: 100% !important;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .data-table thead { display: table-header-group; } /* 跨页时表头自动重复 */
+  .data-table th {
+    background: #F2F5FA !important;
+    color: #374151 !important;
+    border-bottom: 0.6pt solid #C3CDDB !important;
+    padding: 2.3mm 3mm;
+    font-size: 8.8pt;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .data-table td {
+    color: #1F2937 !important;
+    border-bottom: 0.4pt solid #E4E9F1 !important;
+    padding: 2.5mm 3mm;
+  }
+  .data-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .data-table tr:hover td { background: transparent !important; }
+  .data-table .best { color: #067647 !important; }
+  .data-table .worst { color: #B42318 !important; }
+
+  /* —— 其他板块 —— */
+  .ov-pair > div {
+    background: #F7F9FC !important;
+    border: 0.4pt solid #D9E0EA !important;
+    break-inside: avoid;
+  }
+  .ov-pair b { color: #0F172A !important; }
+  .ov-pair span { color: #374151 !important; }
+  .ov-tip {
+    background: #F5F8FF !important;
+    border-left: 1.5pt solid #1D4ED8;
+    border-radius: 0 1mm 1mm 0;
+    color: #374151 !important;
+  }
+  .ov-cov > span {
+    background: #F7F9FC !important;
+    border: 0.4pt solid #D9E0EA !important;
+    color: #374151 !important;
+  }
+  .ov-diff { color: #374151 !important; }
+  .ov-review { color: #374151 !important; }
+  .ov-review li::marker { color: #92600C !important; }
+  .ov-review li { break-inside: avoid; }
+
+  .know-grid { gap: 3mm; }
+  .know-card {
+    background: #F7F9FC !important;
+    border: 0.4pt solid #D9E0EA !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .know-card b { color: #0F172A !important; }
+  .know-card p { color: #374151 !important; }
+  .know-card a { color: #0369A1 !important; word-break: break-all; }
+
+  /* ═══ 5. 其他视图兜底（保证任何页面打印都不出黑底） ═══ */
+  .kpi {
+    background: #F7F9FC !important;
+    border: 0.4pt solid #D9E0EA !important;
+    break-inside: avoid;
+  }
+  .kpi .k-label { color: #6B7280 !important; }
+  .kpi .k-value.danger { color: #B42318 !important; }
+  .kpi .k-value.warn { color: #92600C !important; }
+  .kpi .k-value.good { color: #067647 !important; }
+  .badge { border: 0.4pt solid currentColor; }
+  .cov-card,
+  .diff-change,
+  .agent-trace {
+    background: #FFFFFF !important;
+    border: 0.4pt solid #D9E0EA !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .cov-src mark { background: #FFF6CC !important; color: #111827 !important; }
+  .formula-box { background: #F7F9FC !important; border: 0.4pt solid #D9E0EA !important; color: #1D4ED8 !important; }
+  .formula-box .fx-note { color: #6B7280 !important; }
+
+  /* ═══ 6. 图表（内联 SVG，打印为矢量，不失真） ═══ */
+  .chart-box svg { width: 100% !important; height: auto !important; }
+  .chart-box svg text { fill: #4B5563 !important; }
+  .chart-box svg circle { fill: #FFFFFF !important; }
+  .chart-box svg polyline { stroke: #1D4ED8 !important; }
+  /* 只把坐标轴基线改浅，保留阈值虚线的警示色 */
+  .chart-box svg line:not([stroke-dasharray]) { stroke: #D9E0EA !important; }
+  .cg-bar-row { color: #374151 !important; }
+  .cg-bar-row > i { background: #E4E9F1 !important; }
+
+  /* 逐期现金流图：取消横向滚动裁剪，全宽铺满一页宽度；
+     多序列颜色必须保留，因此这里不做 polyline 统一改色 */
+  .cg-flow { break-inside: avoid; page-break-inside: avoid; margin: 3mm 0 4mm; }
+  .cg-flow-scroll { overflow: visible !important; padding: 0 !important; }
+  .cg-flow-scroll svg { width: 100% !important; height: auto !important; min-width: 0 !important; }
+  .cg-flow svg text { fill: #4B5563 !important; }
+  .cg-flow svg circle { fill: #FFFFFF !important; }
+  .cg-flow-legend { color: #374151 !important; }
+  .cg-flow-legend i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .cg-flow-note { color: #4B5563 !important; }
+  .cg-flow-unit { color: #6B7280 !important; }
+
+  /* ═══ 7. 打印专用页眉 / 页脚 ═══ */
+  .print-only { display: block !important; }
+
+  .print-header {
+    margin: 0 0 6mm;
+    padding-bottom: 3.5mm;
+    border-bottom: 2pt solid #0F172A;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .print-header .ph-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6mm;
+  }
+  .print-header .ph-brand {
+    font-size: 10.5pt;
+    font-weight: 800;
+    color: #0F172A !important;
+    letter-spacing: 0.03em;
+  }
+  .print-header .ph-top-time { font-size: 8.5pt; color: #6B7280 !important; }
+  .print-header .ph-title {
+    font-size: 17pt;
+    font-weight: 800;
+    color: #0F172A !important;
+    text-align: center;
+    margin: 5mm 0 2.5mm;
+    letter-spacing: 0.01em;
+  }
+  .print-header .ph-sub {
+    font-size: 9.5pt;
+    color: #374151 !important;
+    text-align: center;
+  }
+  .print-header .ph-meta {
+    font-size: 8.5pt;
+    color: #6B7280 !important;
+    text-align: center;
+    margin-top: 2.5mm;
+  }
+
+  .print-footer {
+    margin-top: 7mm;
+    padding-top: 3mm;
+    border-top: 0.4pt solid #D9E0EA;
+    font-size: 7.8pt;
+    color: #6B7280 !important;
+    line-height: 1.72;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .print-footer p { margin-bottom: 1.6mm; }
+  .print-footer b { color: #374151 !important; }
+  .print-footer .pf-no { margin-top: 2mm; color: #9CA3AF !important; }
+}

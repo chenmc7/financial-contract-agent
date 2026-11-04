@@ -23,7 +23,7 @@ from . import consistency as consistency_mod
 from . import transactions as tx
 from .schemas import (UNIVERSAL_FIELDS, TYPE_FIELDS, NA_FIELDS, NA_NOTES,
                        STATUS_LABELS, UNCERTAIN_BELOW)
-from .llm_extract import llm_enrich
+from .llm_extract import llm_enrich, LLM_DOC_LIMIT
 
 PIPELINE_STAGES = [
     ("normalize", "文本清洗与版面结构还原"),
@@ -173,6 +173,7 @@ def _build_diagnostics(doc, type_info, fields, consistency, llm_status):
         "低置信度字段：%d" % len(low_conf),
         "冲突字段：%d" % stats["conflict"],
     ]
+    clean_len = len(doc.get("clean_text") or "")
     return {
         "file_parse": "成功",
         "sections": len(doc.get("sections", [])),
@@ -180,6 +181,9 @@ def _build_diagnostics(doc, type_info, fields, consistency, llm_status):
         "contract_type": {"label": type_info["label"],
                           "confidence": type_info["confidence"]},
         "llm": llm_status,
+        "llm_input_chars": min(clean_len, LLM_DOC_LIMIT),
+        # 只有真的把正文送进模型时"截断"才成立：未配置、无需补强都不算
+        "llm_truncated": clean_len > LLM_DOC_LIMIT and llm_status not in ("skipped", "llm_off", "no_gap"),
         "field_stats": stats,
         "fee_items": len(fees),
         "risk_fields_found": risk_found,

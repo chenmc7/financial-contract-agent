@@ -1,0 +1,16 @@
+# 复现当前测试通过的版本（2026-10-31，Python 3.13.12，pytest 96 passed）
+#
+# 用法：pip install -r requirements.lock
+#
+# 与 requirements.txt 的分工：
+#   requirements.txt  语义化范围，便于升级，日常开发用
+#   requirements.lock 精确版本，便于复现，CI 与交付用
+#
+# 只锁定顶层依赖；传递依赖由 pip 按这些版本解析。若需完全锁定，
+# 可改用 pip-tools：pip-compile --output-file=requirements.lock requirements.in
+
+fastapi==0.138.1
+uvicorn[standard]==0.49.0
+python-multipart==0.0.32
+PyMuPDF==1.28.0
+openpyxl==3.1.5
